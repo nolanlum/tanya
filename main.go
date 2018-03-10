@@ -5,14 +5,33 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"github.com/nolanlum/tanya/irc"
 )
+
+type ircMessage struct {
+	thing string
+}
+
+type ircServer struct {
+	Channels []string
+	Nick string
+	User string
+}
 
 func handleConn(c net.Conn) {
 	defer c.Close()
 	s := bufio.NewScanner(c)
 	for s.Scan() {
-		// Reads a line with s.Text() and echoes it back
-		fmt.Fprintln(c, s.Text())
+		// Reads a line with s.Text() and parses it as
+		// an IRC message
+		msg, err := irc.StringToMessage(s.Text())
+		if err != nil {
+			// TODO: make this an actual IRC error
+			fmt.Fprintln(c, "malformed IRC message")
+		} else {
+			fmt.Fprintln(c, msg)
+		}
 	}
 }
 
