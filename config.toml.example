@@ -1,0 +1,6 @@
+# config.toml example
+
+[slack]
+
+# Slack client token
+token = ""

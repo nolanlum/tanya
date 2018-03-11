@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
 )
 
@@ -15,8 +16,8 @@ type ircMessage struct {
 
 type ircServer struct {
 	Channels []string
-	Nick string
-	User string
+	Nick     string
+	User     string
 }
 
 func handleConn(c net.Conn) {
@@ -41,6 +42,13 @@ func main() {
 		log.Fatal(err)
 	}
 	defer l.Close()
+
+	conf, err := ParseConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go gateway.Poop(conf.Slack.Token)
 	for {
 		conn, err := l.Accept()
 		if err != nil {
