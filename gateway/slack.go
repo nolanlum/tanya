@@ -23,16 +23,22 @@ func slackChannelFromDto(channel *slack.Channel) *SlackChannel {
 }
 
 type SlackUser struct {
-	SlackId     string
-	DisplayName string
-	RealName    string
+	SlackId  string
+	Nick     string
+	RealName string
 }
 
 func slackUserFromDto(user *slack.User) *SlackUser {
+	// !sux slack
+	nick := user.Profile.DisplayNameNormalized
+	if nick == "" {
+		nick = user.Profile.RealNameNormalized
+	}
+
 	return &SlackUser{
-		SlackId:     user.ID,
-		DisplayName: user.Name,
-		RealName:    user.RealName,
+		SlackId:  user.ID,
+		Nick:     nick,
+		RealName: user.RealName,
 	}
 }
 
@@ -130,32 +136,40 @@ func Poop(token string) {
 				user, err := slackClient.ResolveUser(messageData.User)
 				if err != nil {
 					log.Println(err)
+					continue
 				}
 				channel, err := slackClient.ResolveChannel(messageData.Channel)
 				if err != nil {
 					log.Println(err)
-				}
-
-				if user == nil || channel == nil {
-
 					continue
 				}
 
-				fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n", user.DisplayName, channel.Name, messageData.Text)
-				if messageData.Text == "hallo!" {
-					rtm.SendMessage(&slack.OutgoingMessage{
-						ID:      1,
-						Channel: messageData.Channel,
-						Text:    "hullo!",
-						Type:    "message",
-					})
+				if messageData.Text != "" {
+					fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
+						user.Nick, channel.Name, slackClient.ParseMessageText(messageData.Text))
+
+					if messageData.Text == "hallo!" {
+						rtm.SendMessage(&slack.OutgoingMessage{
+							ID:      1,
+							Channel: messageData.Channel,
+							Text:    "hullo!",
+							Type:    "message",
+						})
+					}
+
+				} else {
+					// Maybe we have an attachment instead.
+					for _, attachment := range messageData.Attachments {
+						fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
+							user.Nick, channel.Name, attachment.Fallback)
+					}
 				}
 
 			default:
 				fmt.Printf("%v: %+v\n", event.Type, event.Data)
 			}
 
-		case "channel_marked", "latency_report", "user_typing":
+		case "channel_marked", "latency_report", "user_typing", "pref_change":
 			// haha nobody cares about this
 
 		default:
