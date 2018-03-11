@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+// ParseMessageText takes raw Slack message payload and resolves the user
+// and channel references
 func (sc *SlackClient) ParseMessageText(text string) string {
 	parsedMessageBuilder := strings.Builder{}
 

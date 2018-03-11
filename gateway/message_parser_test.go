@@ -24,7 +24,7 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 			fields: fields{
 				userInfo: map[string]*SlackUser{
 					"U2VEKS57B": {
-						SlackId:  "U2VEKS57B",
+						SlackID:  "U2VEKS57B",
 						Nick:     "papika",
 						RealName: "ピュア バリアー",
 					},

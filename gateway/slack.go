@@ -7,8 +7,9 @@ import (
 	"github.com/nlopes/slack"
 )
 
+// SlackChannel holds data for a channel on Slack
 type SlackChannel struct {
-	SlackId string
+	SlackID string
 	Name    string
 
 	Topic slack.Topic
@@ -16,14 +17,15 @@ type SlackChannel struct {
 
 func slackChannelFromDto(channel *slack.Channel) *SlackChannel {
 	return &SlackChannel{
-		SlackId: channel.ID,
+		SlackID: channel.ID,
 		Name:    channel.Name,
 		Topic:   channel.Topic,
 	}
 }
 
+// SlackUser holds data for each user on Slack
 type SlackUser struct {
-	SlackId  string
+	SlackID  string
 	Nick     string
 	RealName string
 }
@@ -36,12 +38,13 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	}
 
 	return &SlackUser{
-		SlackId:  user.ID,
+		SlackID:  user.ID,
 		Nick:     nick,
 		RealName: user.RealName,
 	}
 }
 
+// SlackClient holds information for the websockets conn to Slack
 type SlackClient struct {
 	client *slack.Client
 	rtm    *slack.RTM
@@ -50,6 +53,8 @@ type SlackClient struct {
 	userInfo    map[string]*SlackUser
 }
 
+// BootstrapMappings makes the initial Slack calls to bootstrap
+// our connection
 func (sc *SlackClient) BootstrapMappings() {
 	hasMore := true
 	gcp := &slack.GetConversationsParameters{
@@ -81,13 +86,14 @@ func (sc *SlackClient) BootstrapMappings() {
 	}
 }
 
-func (sc *SlackClient) ResolveUser(slackId string) (user *SlackUser, err error) {
-	user, found := sc.userInfo[slackId]
+// ResolveUser takes a slackID and fetches a SlackUser for the ID
+func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
+	user, found := sc.userInfo[slackID]
 	if found {
 		return
 	}
 
-	userInfo, err := sc.client.GetUserInfo(slackId)
+	userInfo, err := sc.client.GetUserInfo(slackID)
 	if err != nil {
 		return
 	}
@@ -97,13 +103,14 @@ func (sc *SlackClient) ResolveUser(slackId string) (user *SlackUser, err error) 
 	return
 }
 
-func (sc *SlackClient) ResolveChannel(slackId string) (channel *SlackChannel, err error) {
-	channel, found := sc.channelInfo[slackId]
+// ResolveChannel takes a slackID and fetches a SlackChannel for the ID
+func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, err error) {
+	channel, found := sc.channelInfo[slackID]
 	if found {
 		return
 	}
 
-	channelInfo, err := sc.client.GetConversationInfo(slackId, false)
+	channelInfo, err := sc.client.GetConversationInfo(slackID, false)
 	if err != nil {
 		return
 	}
@@ -113,6 +120,7 @@ func (sc *SlackClient) ResolveChannel(slackId string) (channel *SlackChannel, er
 	return
 }
 
+// Poop handles the communication with Slack
 func Poop(token string) {
 	client := slack.New(token)
 	rtm := client.NewRTM()

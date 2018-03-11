@@ -10,10 +10,12 @@ type slack struct {
 	Token string
 }
 
+// Config holds configuration data for Tanya
 type Config struct {
 	Slack slack
 }
 
+// ParseConfig reads a ./config.toml file and retruns a parsed config
 func ParseConfig() (*Config, error) {
 	tomlData, err := ioutil.ReadFile("config.toml")
 	if err != nil {
