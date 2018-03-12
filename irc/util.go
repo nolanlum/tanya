@@ -9,13 +9,13 @@ type Privmsg struct {
 	Message string
 }
 
-// ToMessage turns an Privmsg into a Message
+// ToMessage turns a Privmsg into a Message
 func (p *Privmsg) ToMessage() *Message {
 	var prefixStr string
 	if p.From != "" {
 		prefixStr = fmt.Sprintf("%v!%[1]v@localhost", p.From)
 	}
-	
+
 	channelStr := "#" + p.Channel
 	return &Message{
 		prefixStr,

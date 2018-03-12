@@ -23,9 +23,9 @@ type Message struct {
 }
 
 var cmdToStrMap = map[Command]string{
-	NickCmd: "nick",
-	UserCmd: "user",
-	PrivmsgCmd: "privmsg",
+	NickCmd:    "NICK",
+	UserCmd:    "USER",
+	PrivmsgCmd: "PRIVMSG",
 }
 
 func (m *Message) String() string {
@@ -40,11 +40,14 @@ func (m *Message) String() string {
 		b.WriteString(m.Prefix)
 		b.WriteString(" ")
 	}
-	
+
 	b.WriteString(s)
-	
-	for _, p := range(m.Params) {
-		b.WriteString(" ")		
+
+	for i, p := range m.Params {
+		b.WriteString(" ")
+		if i == len(m.Params)-1 && strings.ContainsRune(p, ' ') {
+			b.WriteString(":")
+		}
 		b.WriteString(p)
 	}
 	return b.String()
@@ -60,36 +63,49 @@ func hasPrefix(str string) bool {
 	return str[0] == ':'
 }
 
+// Represents the error returned when parsing an incoming IRC line fails
+// due to invalid message syntax
+var MalformedIRCMessageError = errors.New("malformed IRC message")
+
 // StringToMessage takes a string with a line of input
 // and returns a Message corresponding to the line
 func StringToMessage(str string) (*Message, error) {
 	splitStr := strings.Split(str, " ")
 	if len(splitStr) < 1 {
-		return nil, errors.New("malformed IRC message")
+		return nil, MalformedIRCMessageError
 	}
 
 	var cmdStr string
 	var prefix string
+	var params []string
 	var paramInd int
 	if hasPrefix(str) {
 		if len(splitStr) < 2 {
-			return nil, errors.New("malformed IRC message")
+			return nil, MalformedIRCMessageError
 		}
 		prefix = strings.ToLower(splitStr[0])
 		cmdStr = strings.ToLower(splitStr[1])
-		paramInd = 1
+		paramInd = 2
 	} else {
 		cmdStr = strings.ToLower(splitStr[0])
-		paramInd = 0
+		paramInd = 1
 	}
 
-	params := splitStr[(paramInd + 1):]
-	switch cmdStr {
-	case "user":
+	for i := paramInd; i < len(splitStr); i++ {
+		if splitStr[i][0] == ':' {
+			params = append(params, strings.Join(splitStr[i:], " ")[1:])
+			break
+		} else {
+			params = append(params, splitStr[i])
+		}
+	}
+
+	switch strings.ToUpper(cmdStr) {
+	case "USER":
 		return &Message{prefix, UserCmd, params}, nil
-	case "nick":
+	case "NICK":
 		return &Message{prefix, NickCmd, params}, nil
-	case "privmsg":
+	case "PRIVMSG":
 		return &Message{prefix, PrivmsgCmd, params}, nil
 	default:
 		return nil, errors.New(splitStr[0] + " is not a valid IRC command")
