@@ -12,10 +12,12 @@ type Command int
 const (
 	NickCmd Command = iota
 	UserCmd
+	PrivmsgCmd
 )
 
 // Message corresponds to an IRC message
 type Message struct {
+	Prefix string
 	Cmd    Command
 	Params []string
 }
@@ -23,6 +25,7 @@ type Message struct {
 var cmdToStrMap = map[Command]string{
 	NickCmd: "nick",
 	UserCmd: "user",
+	PrivmsgCmd: "privmsg",
 }
 
 func (m *Message) String() string {
@@ -30,7 +33,21 @@ func (m *Message) String() string {
 	if !ok {
 		return ""
 	}
-	return s
+	var b strings.Builder
+
+	if m.Prefix != "" {
+		b.WriteString(":")
+		b.WriteString(m.Prefix)
+		b.WriteString(" ")
+	}
+	
+	b.WriteString(s)
+	
+	for _, p := range(m.Params) {
+		b.WriteString(" ")		
+		b.WriteString(p)
+	}
+	return b.String()
 }
 
 // This is technically incorrect as the prefix must contain
@@ -52,20 +69,28 @@ func StringToMessage(str string) (*Message, error) {
 	}
 
 	var cmdStr string
+	var prefix string
+	var paramInd int
 	if hasPrefix(str) {
 		if len(splitStr) < 2 {
 			return nil, errors.New("malformed IRC message")
 		}
+		prefix = strings.ToLower(splitStr[0])
 		cmdStr = strings.ToLower(splitStr[1])
+		paramInd = 1
 	} else {
-		cmdStr = strings.ToLower(splitStr[0])	
+		cmdStr = strings.ToLower(splitStr[0])
+		paramInd = 0
 	}
-	
+
+	params := splitStr[(paramInd + 1):]
 	switch cmdStr {
 	case "user":
-		return &Message{UserCmd, splitStr[1:]}, nil
+		return &Message{prefix, UserCmd, params}, nil
 	case "nick":
-		return &Message{NickCmd, splitStr[1:]}, nil
+		return &Message{prefix, NickCmd, params}, nil
+	case "privmsg":
+		return &Message{prefix, PrivmsgCmd, params}, nil
 	default:
 		return nil, errors.New(splitStr[0] + " is not a valid IRC command")
 	}
