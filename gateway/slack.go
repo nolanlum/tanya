@@ -177,8 +177,6 @@ func Poop(token string, chans *ClientChans) {
 							chans.SendChan <- &Message{
 								user.Nick, channel.Name, slackClient.ParseMessageText(messageData.Text),
 							}
-							// fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
-							// 	user.Nick, channel.Name, slackClient.ParseMessageText(messageData.Text))
 
 							if messageData.Text == "hallo!" {
 								rtm.SendMessage(&slack.OutgoingMessage{
@@ -197,8 +195,6 @@ func Poop(token string, chans *ClientChans) {
 									channel.Name,
 									attachment.Fallback,
 								}
-								// fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
-								// 	user.Nick, channel.Name, attachment.Fallback)
 							}
 						}
 						
@@ -207,7 +203,6 @@ func Poop(token string, chans *ClientChans) {
 							"", "",
 							fmt.Sprintf("%v: %+v", event.Type, event.Data),
 						}
-						// fmt.Printf("%v: %+v\n", event.Type, event.Data)
 					}
 				} else {
 					chans.SendChan <- &Message{
