@@ -20,8 +20,8 @@ type ircServer struct {
 	User     string
 }
 
-func slackToUtterance(m *gateway.Message) *irc.Utterance {
-	return &irc.Utterance{
+func slackToPrivmsg(m *gateway.Message) *irc.Privmsg {
+	return &irc.Privmsg{
 		From: m.Nick,
 		Channel: m.Channel,
 		Message: m.Data,
@@ -47,8 +47,8 @@ func handleConn(c net.Conn) {
 func writeMessageLoop(c net.Conn, recvChan <-chan *gateway.Message) {
 	for {
 		msg := <- recvChan
-		u := slackToUtterance(msg)
-		fmt.Fprintln(c, u.ToMessage().String())
+		p := slackToPrivmsg(msg)
+		fmt.Fprintln(c, p.ToMessage().String())
 	}
 }
 
