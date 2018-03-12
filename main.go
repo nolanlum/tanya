@@ -22,7 +22,7 @@ type ircServer struct {
 
 func slackToPrivmsg(m *gateway.Message) *irc.Privmsg {
 	return &irc.Privmsg{
-		From: m.Nick,
+		From:    m.Nick,
 		Channel: m.Channel,
 		Message: m.Data,
 	}
@@ -46,7 +46,7 @@ func handleConn(c net.Conn) {
 
 func writeMessageLoop(c net.Conn, recvChan <-chan *gateway.Message) {
 	for {
-		msg := <- recvChan
+		msg := <-recvChan
 		p := slackToPrivmsg(msg)
 		fmt.Fprintln(c, p.ToMessage().String())
 	}
@@ -66,12 +66,12 @@ func main() {
 
 	stopChan := make(chan bool)
 	recvChan := make(chan *gateway.Message)
-	go gateway.Poop(
-		conf.Slack.Token,
-		&gateway.ClientChans{
-			StopChan: stopChan,
-			SendChan: recvChan,
-		})
+	slackClient := gateway.NewSlackClient()
+	slackClient.Initialize(conf.Slack.Token)
+	go slackClient.Poop(&gateway.ClientChans{
+		StopChan: stopChan,
+		SendChan: recvChan,
+	})
 	for {
 		conn, err := l.Accept()
 		if err != nil {

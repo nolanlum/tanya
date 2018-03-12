@@ -66,7 +66,7 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := New()
+			sc := NewSlackClient()
 			sc.channelInfo = tt.fields.channelInfo
 			sc.userInfo = tt.fields.userInfo
 
