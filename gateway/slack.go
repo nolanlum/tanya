@@ -120,11 +120,27 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 	return
 }
 
+// Message represents text uttered in a Slack channel
+type Message struct {
+	Nick string
+	Channel string
+	Data string
+}
+
+// ClientChans contains a sending channel, receiving channel, and stop channel
+// that the Slack goroutine receives from, sends to, and can stop according to
+type ClientChans struct {
+	RecvChan <-chan string
+	SendChan chan<- *Message
+	StopChan <-chan bool
+}
+
 // Poop handles the communication with Slack
-func Poop(token string) {
+func Poop(token string, chans *ClientChans) {
 	client := slack.New(token)
 	rtm := client.NewRTM()
 	go rtm.ManageConnection()
+	defer rtm.Disconnect()
 
 	slackClient := SlackClient{
 		client:      client,
@@ -135,53 +151,75 @@ func Poop(token string) {
 	slackClient.BootstrapMappings()
 
 	for {
-		event := <-rtm.IncomingEvents
-		switch event.Type {
-		case "message":
-			messageData := event.Data.(*slack.MessageEvent)
-			switch messageData.SubType {
-			case "":
-				user, err := slackClient.ResolveUser(messageData.User)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				channel, err := slackClient.ResolveChannel(messageData.Channel)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
+		select {
+		case <- chans.StopChan:
+			return
+		default:
+			event := <-rtm.IncomingEvents
+			switch event.Type {
+			case "message":
+				messageData, ok := event.Data.(*slack.MessageEvent)
+				if ok {
+					switch messageData.SubType {
+					case "":
+						user, err := slackClient.ResolveUser(messageData.User)
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						channel, err := slackClient.ResolveChannel(messageData.Channel)
+						if err != nil {
+							log.Println(err)
+							continue
+						}
 
-				if messageData.Text != "" {
-					fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
-						user.Nick, channel.Name, slackClient.ParseMessageText(messageData.Text))
+						if messageData.Text != "" {
+							chans.SendChan <- &Message{
+								user.Nick, channel.Name, slackClient.ParseMessageText(messageData.Text),
+							}
 
-					if messageData.Text == "hallo!" {
-						rtm.SendMessage(&slack.OutgoingMessage{
-							ID:      1,
-							Channel: messageData.Channel,
-							Text:    "hullo!",
-							Type:    "message",
-						})
+							if messageData.Text == "hallo!" {
+								rtm.SendMessage(&slack.OutgoingMessage{
+									ID:      1,
+									Channel: messageData.Channel,
+									Text:    "hullo!",
+									Type:    "message",
+								})
+							}
+
+						} else {
+							// Maybe we have an attachment instead.
+							for _, attachment := range messageData.Attachments {
+								chans.SendChan <- &Message{
+									user.Nick,
+									channel.Name,
+									attachment.Fallback,
+								}
+							}
+						}
+						
+					default:
+						chans.SendChan <- &Message{
+							"", "",
+							fmt.Sprintf("%v: %+v", event.Type, event.Data),
+						}
 					}
-
 				} else {
-					// Maybe we have an attachment instead.
-					for _, attachment := range messageData.Attachments {
-						fmt.Printf(":%v!%[1]v@localhost PRIVMSG #%v :%v\n",
-							user.Nick, channel.Name, attachment.Fallback)
+					chans.SendChan <- &Message{
+						"", "",
+						fmt.Sprintf("Non message-event: %v", event.Data),
 					}
 				}
+			case "channel_marked", "latency_report", "user_typing", "pref_change":
+				// haha nobody cares about this
 
 			default:
-				fmt.Printf("%v: %+v\n", event.Type, event.Data)
+				chans.SendChan <- &Message{
+					"", "",
+					fmt.Sprintf("%v: %+v", event.Type, event.Data),
+				}
 			}
-
-		case "channel_marked", "latency_report", "user_typing", "pref_change":
-			// haha nobody cares about this
-
-		default:
-			fmt.Printf("%v: %+v\n", event.Type, event.Data)
 		}
 	}
 }
+

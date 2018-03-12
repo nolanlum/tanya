@@ -20,6 +20,14 @@ type ircServer struct {
 	User     string
 }
 
+func slackToUtterance(m *gateway.Message) *irc.Utterance {
+	return &irc.Utterance{
+		From: m.Nick,
+		Channel: m.Channel,
+		Message: m.Data,
+	}
+}
+
 func handleConn(c net.Conn) {
 	defer c.Close()
 	s := bufio.NewScanner(c)
@@ -36,6 +44,14 @@ func handleConn(c net.Conn) {
 	}
 }
 
+func writeMessageLoop(c net.Conn, recvChan <-chan *gateway.Message) {
+	for {
+		msg := <- recvChan
+		u := slackToUtterance(msg)
+		fmt.Fprintln(c, u.ToMessage().String())
+	}
+}
+
 func main() {
 	l, err := net.Listen("tcp", ":6667")
 	if err != nil {
@@ -48,12 +64,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	go gateway.Poop(conf.Slack.Token)
+	stopChan := make(chan bool)
+	recvChan := make(chan *gateway.Message)
+	go gateway.Poop(
+		conf.Slack.Token,
+		&gateway.ClientChans{
+			StopChan: stopChan,
+			SendChan: recvChan,
+		})
 	for {
 		conn, err := l.Accept()
 		if err != nil {
 			log.Fatal(err)
 		}
 		go handleConn(conn)
+		go writeMessageLoop(conn, recvChan)
 	}
 }
