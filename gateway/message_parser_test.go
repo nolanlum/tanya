@@ -20,6 +20,12 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 			want:   "haha this is a message",
 		},
 		{
+			name:   "urlencode",
+			fields: fields{},
+			text:   "haha this is a &lt;message&gt; &amp; poop",
+			want:   "haha this is a <message> & poop",
+		},
+		{
 			name: "nick reference",
 			fields: fields{
 				userInfo: map[string]*SlackUser{
@@ -60,12 +66,10 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := SlackClient{
-				client:      nil,
-				rtm:         nil,
-				channelInfo: tt.fields.channelInfo,
-				userInfo:    tt.fields.userInfo,
-			}
+			sc := New()
+			sc.channelInfo = tt.fields.channelInfo
+			sc.userInfo = tt.fields.userInfo
+
 			if got := sc.ParseMessageText(tt.text); got != tt.want {
 				t.Errorf("SlackClient.ParseMessageText() = \"%v\", want \"%v\"", got, tt.want)
 			}

@@ -55,5 +55,5 @@ func (sc *SlackClient) ParseMessageText(text string) string {
 		parsedMessageBuilder.WriteString(textParts[0])
 	}
 
-	return parsedMessageBuilder.String()
+	return sc.slackUrlDecoder.Replace(parsedMessageBuilder.String())
 }

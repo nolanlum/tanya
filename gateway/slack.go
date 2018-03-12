@@ -3,6 +3,7 @@ package gateway
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/nlopes/slack"
 )
@@ -51,6 +52,20 @@ type SlackClient struct {
 
 	channelInfo map[string]*SlackChannel
 	userInfo    map[string]*SlackUser
+
+	slackUrlEncoder *strings.Replacer
+	slackUrlDecoder *strings.Replacer
+}
+
+// New creates a new SlackClient with some default values
+func New() *SlackClient {
+	return &SlackClient{
+		channelInfo: make(map[string]*SlackChannel),
+		userInfo:    make(map[string]*SlackUser),
+
+		slackUrlEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
+		slackUrlDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+	}
 }
 
 // BootstrapMappings makes the initial Slack calls to bootstrap
@@ -122,9 +137,9 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 
 // Message represents text uttered in a Slack channel
 type Message struct {
-	Nick string
+	Nick    string
 	Channel string
-	Data string
+	Data    string
 }
 
 // ClientChans contains a sending channel, receiving channel, and stop channel
@@ -142,17 +157,14 @@ func Poop(token string, chans *ClientChans) {
 	go rtm.ManageConnection()
 	defer rtm.Disconnect()
 
-	slackClient := SlackClient{
-		client:      client,
-		rtm:         rtm,
-		channelInfo: make(map[string]*SlackChannel),
-		userInfo:    make(map[string]*SlackUser),
-	}
+	slackClient := New()
+	slackClient.client = client
+	slackClient.rtm = rtm
 	slackClient.BootstrapMappings()
 
 	for {
 		select {
-		case <- chans.StopChan:
+		case <-chans.StopChan:
 			return
 		default:
 			event := <-rtm.IncomingEvents
@@ -197,7 +209,7 @@ func Poop(token string, chans *ClientChans) {
 								}
 							}
 						}
-						
+
 					default:
 						chans.SendChan <- &Message{
 							"", "",
@@ -222,4 +234,3 @@ func Poop(token string, chans *ClientChans) {
 		}
 	}
 }
-
