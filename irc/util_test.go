@@ -5,8 +5,8 @@ import "testing"
 func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
 	p := &Privmsg{
-		From: "poop",
-		Channel: "chatter-technical",
+		From:    "poop",
+		Channel: "#chatter-technical",
 		Message: msgStr,
 	}
 
@@ -31,7 +31,7 @@ func TestToMessage(t *testing.T) {
 
 func TestToMessageEmptyPrefix(t *testing.T) {
 	p := &Privmsg{
-		From: "",
+		From:    "",
 		Channel: "chatter-technical",
 		Message: "hi im a poop",
 	}
