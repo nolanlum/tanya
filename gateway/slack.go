@@ -19,7 +19,7 @@ type SlackChannel struct {
 func slackChannelFromDto(channel *slack.Channel) *SlackChannel {
 	return &SlackChannel{
 		SlackID: channel.ID,
-		Name:    channel.Name,
+		Name:    "#" + channel.Name,
 		Topic:   channel.Topic,
 	}
 }

@@ -16,10 +16,9 @@ func (p *Privmsg) ToMessage() *Message {
 		prefixStr = fmt.Sprintf("%v!%[1]v@localhost", p.From)
 	}
 
-	channelStr := "#" + p.Channel
 	return &Message{
 		prefixStr,
 		PrivmsgCmd,
-		[]string{channelStr, p.Message},
+		[]string{p.Channel, p.Message},
 	}
 }
