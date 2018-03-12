@@ -4,13 +4,13 @@ import "testing"
 
 func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
-	u := &Utterance{
+	p := &Privmsg{
 		From: "poop",
 		Channel: "chatter-technical",
 		Message: msgStr,
 	}
 
-	m := u.ToMessage()
+	m := p.ToMessage()
 
 	if m.Prefix != "poop!poop@localhost" {
 		t.Error("Did not generate prefix corectly")
@@ -30,13 +30,13 @@ func TestToMessage(t *testing.T) {
 }
 
 func TestToMessageEmptyPrefix(t *testing.T) {
-	u := &Utterance{
+	p := &Privmsg{
 		From: "",
 		Channel: "chatter-technical",
 		Message: "hi im a poop",
 	}
 
-	m := u.ToMessage()
+	m := p.ToMessage()
 
 	if m.Prefix != "" {
 		t.Error("Prefix is not empty when it should be")
