@@ -1,6 +1,9 @@
 package irc
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
@@ -43,5 +46,47 @@ func TestToMessageEmptyPrefix(t *testing.T) {
 	}
 	if m.Cmd != PrivmsgCmd {
 		t.Error("Not setting command to PrivmsgCmd")
+	}
+}
+
+func TestNick_ToMessage(t *testing.T) {
+	type fields struct {
+		From    string
+		NewNick string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   *Message
+	}{
+		{
+			"no prefix",
+			fields{"", "czi"},
+			&Message{
+				"",
+				NickCmd,
+				[]string{"czi"},
+			},
+		},
+		{
+			"with prefix",
+			fields{"asid", "czi"},
+			&Message{
+				"asid!asid@localhost",
+				NickCmd,
+				[]string{"czi"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			n := &Nick{
+				From:    tt.fields.From,
+				NewNick: tt.fields.NewNick,
+			}
+			if got := n.ToMessage(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Nick.ToMessage() = \"%v\", want \"%v\"", got, tt.want)
+			}
+		})
 	}
 }

@@ -84,10 +84,10 @@ func StringToMessage(str string) (*Message, error) {
 			return nil, MalformedIRCMessageError
 		}
 		prefix = strings.ToLower(splitStr[0])
-		cmdStr = strings.ToLower(splitStr[1])
+		cmdStr = strings.ToUpper(splitStr[1])
 		paramInd = 2
 	} else {
-		cmdStr = strings.ToLower(splitStr[0])
+		cmdStr = strings.ToUpper(splitStr[0])
 		paramInd = 1
 	}
 
@@ -100,7 +100,7 @@ func StringToMessage(str string) (*Message, error) {
 		}
 	}
 
-	switch strings.ToUpper(cmdStr) {
+	switch cmdStr {
 	case "USER":
 		return &Message{prefix, UserCmd, params}, nil
 	case "NICK":
