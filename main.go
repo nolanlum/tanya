@@ -20,11 +20,18 @@ type ircServer struct {
 	User     string
 }
 
-func slackToPrivmsg(m *gateway.Message) *irc.Privmsg {
+func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 	return &irc.Privmsg{
 		From:    m.Nick,
-		Channel: m.Channel,
-		Message: m.Data,
+		Channel: m.Target,
+		Message: m.Message,
+	}
+}
+
+func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
+	return &irc.Nick{
+		From:    n.OldNick,
+		NewNick: n.NewNick,
 	}
 }
 
@@ -44,11 +51,17 @@ func handleConn(c net.Conn) {
 	}
 }
 
-func writeMessageLoop(c net.Conn, recvChan <-chan *gateway.Message) {
+func writeMessageLoop(c net.Conn, recvChan <-chan *gateway.SlackEvent) {
 	for {
 		msg := <-recvChan
-		p := slackToPrivmsg(msg)
-		fmt.Fprintln(c, p.ToMessage().String())
+		switch msg.EventType {
+		case gateway.MessageEvent:
+			p := slackToPrivmsg(msg.Data.(*gateway.MessageEventData))
+			fmt.Fprintln(c, p.ToMessage().String())
+		case gateway.NickChangeEvent:
+			n := slackToNick(msg.Data.(*gateway.NickChangeEventData))
+			fmt.Fprintln(c, n.ToMessage().String())
+		}
 	}
 }
 
@@ -65,12 +78,12 @@ func main() {
 	}
 
 	stopChan := make(chan bool)
-	recvChan := make(chan *gateway.Message)
+	recvChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
 	slackClient.Initialize(conf.Slack.Token)
 	go slackClient.Poop(&gateway.ClientChans{
-		StopChan: stopChan,
-		SendChan: recvChan,
+		StopChan:     stopChan,
+		IncomingChan: recvChan,
 	})
 	for {
 		conn, err := l.Accept()

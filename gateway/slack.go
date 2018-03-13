@@ -134,19 +134,13 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 	return
 }
 
-// Message represents text uttered in a Slack channel
-type Message struct {
-	Nick    string
-	Channel string
-	Data    string
-}
-
 // ClientChans contains a sending channel, receiving channel, and stop channel
-// that the Slack goroutine receives from, sends to, and can stop according to
+// that the Slack goroutine receives outgoing commands from, sends incoming messages to,
+// and can stop according to
 type ClientChans struct {
-	RecvChan <-chan string
-	SendChan chan<- *Message
-	StopChan <-chan bool
+	OutgoingChan <-chan string
+	IncomingChan chan<- *SlackEvent
+	StopChan     <-chan bool
 }
 
 // Initialize bootstraps the SlackClient with a client token and loads data
@@ -154,6 +148,13 @@ func (sc *SlackClient) Initialize(token string) {
 	sc.client = slack.New(token)
 	sc.rtm = sc.client.NewRTM()
 	sc.bootstrapMappings()
+}
+
+func newSlackMessageEvent(nick, target, message string) *SlackEvent {
+	return &SlackEvent{
+		EventType: MessageEvent,
+		Data:      &MessageEventData{nick, target, message},
+	}
 }
 
 // Poop is a goroutine entry point that handles the communication with Slack
@@ -172,10 +173,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "message":
 				messageData, ok := event.Data.(*slack.MessageEvent)
 				if !ok {
-					chans.SendChan <- &Message{
-						"*tanya", "*tanya",
-						fmt.Sprintf("Non message-event: %v", event.Data),
-					}
+					chans.IncomingChan <- newSlackMessageEvent(
+						"*tanya", "*tanya", fmt.Sprintf("Non message-event: %+v", event.Data))
 					break
 				}
 
@@ -193,34 +192,47 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 
 					if messageData.Text != "" {
-						chans.SendChan <- &Message{
-							user.Nick, channel.Name, sc.ParseMessageText(messageData.Text),
-						}
+						chans.IncomingChan <- newSlackMessageEvent(
+							user.Nick, channel.Name, sc.ParseMessageText(messageData.Text))
 
 						if messageData.Text == "hallo!" {
-							sc.rtm.SendMessage(&slack.OutgoingMessage{
-								ID:      1,
-								Channel: messageData.Channel,
-								Text:    "hullo!",
-								Type:    "message",
-							})
+							sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage("hullo!", messageData.Channel))
 						}
 
 					} else {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
-							chans.SendChan <- &Message{
-								user.Nick,
-								channel.Name,
-								sc.slackUrlDecoder.Replace(attachment.Fallback),
-							}
+							chans.IncomingChan <- newSlackMessageEvent(
+								user.Nick, channel.Name, sc.slackUrlDecoder.Replace(attachment.Fallback))
 						}
 					}
 
 				default:
-					chans.SendChan <- &Message{
-						"*tanya", "*tanya",
-						fmt.Sprintf("%v: %+v", event.Type, event.Data),
+					chans.IncomingChan <- newSlackMessageEvent(
+						"*tanya", "*tanya", fmt.Sprintf("%v: %+v", event.Type, event.Data))
+				}
+
+			case "user_change":
+				userData, ok := event.Data.(*slack.UserChangeEvent)
+				if !ok {
+					chans.IncomingChan <- newSlackMessageEvent(
+						"*tanya", "*tanya", fmt.Sprintf("Non userchange-event: %+v", event.Data))
+					break
+				}
+
+				// Update user info based on the new DTO
+				oldUserInfo := sc.userInfo[userData.User.ID]
+				newUserInfo := slackUserFromDto(&userData.User)
+				sc.userInfo[userData.User.ID] = newUserInfo
+
+				// Send nick change event if necessary
+				if oldUserInfo.Nick != newUserInfo.Nick {
+					chans.IncomingChan <- &SlackEvent{
+						EventType: NickChangeEvent,
+						Data: &NickChangeEventData{
+							OldNick: oldUserInfo.Nick,
+							NewNick: newUserInfo.Nick,
+						},
 					}
 				}
 
@@ -228,10 +240,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				// haha nobody cares about this
 
 			default:
-				chans.SendChan <- &Message{
-					"*tanya", "*tanya",
-					fmt.Sprintf("%v: %+v", event.Type, event.Data),
-				}
+				chans.IncomingChan <- newSlackMessageEvent(
+					"*tanya", "*tanya", fmt.Sprintf("%v: %+v", event.Type, event.Data))
 			}
 		}
 	}
