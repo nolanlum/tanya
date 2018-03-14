@@ -19,9 +19,24 @@
   packages = ["."]
   revision = "91c91a11ad0b66b7a690029c56c330ca9f18841b"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/crypto"
+  packages = ["ssh/terminal"]
+  revision = "c4a91bd4f524f10d064139674cf55852e055ad01"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = [
+    "unix",
+    "windows"
+  ]
+  revision = "8c0ece68c28377f4c326d85b94f8df0dace46f80"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e870643fda2f68f79ecffb8a73afe1ff74caed10d5e1b789b1c4959ff8e71d99"
+  inputs-digest = "c353351c466811a4065ae2436af25df66f2a694c644cb96bdd049bf47f738f45"
   solver-name = "gps-cdcl"
   solver-version = 1
