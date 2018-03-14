@@ -22,29 +22,29 @@ type loginResponseFull struct {
 }
 
 func GetSlackToken() (string, error) {
-	var domain, email, token string
+	var domain, email string
 
 	fmt.Print("Team domain (*.slack.com): ")
 	fmt.Scanln(&domain)
 
 	resp, err := http.PostForm("https://slack.com/api/auth.findTeam", url.Values{"domain": {domain}})
 	if err != nil {
-		return token, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return token, err
+		return "", err
 	}
 
 	var findTeamResponse findTeamResponseFull
 	err = json.Unmarshal(body, &findTeamResponse)
 	if err != nil {
-		return token, err
+		return "", err
 	}
 	if findTeamResponse.SSO == true {
-		return token, errors.New("SSO teams not yet supported")
+		return "", errors.New("SSO teams not yet supported")
 	}
 
 	fmt.Print("Slack email: ")
@@ -59,21 +59,20 @@ func GetSlackToken() (string, error) {
 	resp, err = http.PostForm("https://slack.com/api/auth.signin",
 		url.Values{"team": {findTeamResponse.TeamID}, "email": {email}, "password": {password}})
 	if err != nil {
-		return token, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return token, err
+		return "", err
 	}
 
 	var loginResponse loginResponseFull
 	err = json.Unmarshal(body, &loginResponse)
 	if err != nil {
-		return token, err
+		return "", err
 	}
 
-	token = loginResponse.Token
-	return token, nil
+	return loginResponse.Token, nil
 }

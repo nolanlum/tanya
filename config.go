@@ -18,7 +18,7 @@ type Config struct {
 	Slack slack
 }
 
-// parses a config if it exists, or generates a new one
+// LoadConfig parses a config if it exists, or generates a new one
 func LoadConfig() (*Config, error) {
 	tomlData, err := ioutil.ReadFile("config.toml")
 
@@ -57,7 +57,7 @@ func initializeConfig() (*Config, error) {
 // parseConfig reads a toml string and returns a parsed config
 func parseConfig(tomlData string) (*Config, error) {
 	var conf Config
-	if _, err := toml.Decode(string(tomlData), &conf); err != nil {
+	if _, err := toml.Decode(tomlData, &conf); err != nil {
 		return nil, err
 	}
 
