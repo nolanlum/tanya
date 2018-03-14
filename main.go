@@ -38,7 +38,7 @@ func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.
 }
 
 func main() {
-	conf, err := ParseConfig()
+	conf, err := LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
