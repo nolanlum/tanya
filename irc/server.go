@@ -136,7 +136,7 @@ func (s *Server) waitForkillListener(l *net.TCPListener) {
 	// Now try to close them. This list could be stale, but it won't
 	// cause any deadlocks
 	for _, conn := range conns {
-		conn.shutdown <- true
+		close(conn.shutdown)
 	}
 }
 
