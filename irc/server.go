@@ -125,11 +125,19 @@ func (s *Server) waitForkillListener(l *net.TCPListener) {
 	<-s.stopChan
 	l.Close()
 
+	// First grab the lock and grab the active connections
+	conns := make([]*clientConnection, 0)
 	s.RLock()
 	for _, conn := range(s.clientConnections) {
-		conn.shutdown <- true
+		conns = append(conns, conn)
 	}
 	s.RUnlock()
+
+	// Now try to close them. This list could be stale, but it won't
+	// cause any deadlocks
+	for _, conn := range(conns) {
+		conn.shutdown <- true
+	}
 }
 
 // HandleOutgoingMessageRouting handles fanning out IRC messages generated from Slack events
