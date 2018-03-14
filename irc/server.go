@@ -79,7 +79,7 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 	}
 	defer l.Close()
 
-    log.Printf("IRC server now listening on %v", addr)
+	log.Printf("IRC server now listening on %v", addr)
 
 	for {
 		conn, err := l.AcceptTCP()
@@ -110,7 +110,7 @@ func (s *Server) waitForClientCleanup(cc *clientConnection) {
 	s.Unlock()
 }
 
-// Handle fanning out IRC messages generated from Slack events
+// HandleOutgoingMessageRouting handles fanning out IRC messages generated from Slack events
 func (s *Server) HandleOutgoingMessageRouting(outgoingMessages <-chan *Message) {
 	for {
 		message := <-outgoingMessages

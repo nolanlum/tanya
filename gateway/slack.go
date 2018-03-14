@@ -53,8 +53,8 @@ type SlackClient struct {
 	channelInfo map[string]*SlackChannel
 	userInfo    map[string]*SlackUser
 
-	slackUrlEncoder *strings.Replacer
-	slackUrlDecoder *strings.Replacer
+	slackURLEncoder *strings.Replacer
+	slackURLDecoder *strings.Replacer
 }
 
 // NewSlackClient creates a new SlackClient with some default values
@@ -63,8 +63,8 @@ func NewSlackClient() *SlackClient {
 		channelInfo: make(map[string]*SlackChannel),
 		userInfo:    make(map[string]*SlackUser),
 
-		slackUrlEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
-		slackUrlDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+		slackURLEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
+		slackURLDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
 	}
 }
 
@@ -203,7 +203,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
 							chans.IncomingChan <- newSlackMessageEvent(
-								user.Nick, channel.Name, sc.slackUrlDecoder.Replace(attachment.Fallback))
+								user.Nick, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
 						}
 					}
 

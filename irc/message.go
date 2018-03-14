@@ -63,16 +63,16 @@ func hasPrefix(str string) bool {
 	return str[0] == ':'
 }
 
-// Represents the error returned when parsing an incoming IRC line fails
-// due to invalid message syntax
-var MalformedIRCMessageError = errors.New("malformed IRC message")
+// ErrMalformedIRCMessage represents the error returned when parsing an
+// incoming IRC line fails due to invalid message syntax
+var ErrMalformedIRCMessage = errors.New("malformed IRC message")
 
 // StringToMessage takes a string with a line of input
 // and returns a Message corresponding to the line
 func StringToMessage(str string) (*Message, error) {
 	splitStr := strings.Split(str, " ")
 	if len(splitStr) < 1 {
-		return nil, MalformedIRCMessageError
+		return nil, ErrMalformedIRCMessage
 	}
 
 	var cmdStr string
@@ -81,7 +81,7 @@ func StringToMessage(str string) (*Message, error) {
 	var paramInd int
 	if hasPrefix(str) {
 		if len(splitStr) < 2 {
-			return nil, MalformedIRCMessageError
+			return nil, ErrMalformedIRCMessage
 		}
 		prefix = strings.ToLower(splitStr[0])
 		cmdStr = strings.ToUpper(splitStr[1])
