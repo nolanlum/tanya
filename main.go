@@ -33,7 +33,8 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 }
 
 func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan bool) {
-	Loop: for {
+Loop:
+	for {
 		select {
 		case <-stopChan:
 			break Loop
@@ -47,7 +48,7 @@ func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.
 				sendChan <- n.ToMessage()
 			}
 		}
-		
+
 	}
 }
 
@@ -56,7 +57,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 
 	stopChan := make(chan bool)
 	// stopSlackChan := make(chan bool)
@@ -79,7 +79,7 @@ func main() {
 	slackClient.Initialize(conf.Slack.Token)
 	go slackClient.Poop(&gateway.ClientChans{
 		IncomingChan: slackIncomingChan,
-		StopChan: stopChan,
+		StopChan:     stopChan,
 	})
 
 	ircOutgoingChan := make(chan *irc.Message)

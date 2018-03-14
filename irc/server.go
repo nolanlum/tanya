@@ -61,7 +61,7 @@ func (cc *clientConnection) handleConnOutput() {
 // and fanning out Slack events as necessary
 type Server struct {
 	clientConnections map[net.Addr]*clientConnection
-	stopChan <-chan bool
+	stopChan          <-chan bool
 
 	sync.RWMutex
 }
@@ -70,7 +70,7 @@ type Server struct {
 func NewServer(stopChan <-chan bool) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
-		stopChan: stopChan,
+		stopChan:          stopChan,
 	}
 }
 
@@ -128,14 +128,14 @@ func (s *Server) waitForkillListener(l *net.TCPListener) {
 	// First grab the lock and grab the active connections
 	conns := make([]*clientConnection, 0)
 	s.RLock()
-	for _, conn := range(s.clientConnections) {
+	for _, conn := range s.clientConnections {
 		conns = append(conns, conn)
 	}
 	s.RUnlock()
 
 	// Now try to close them. This list could be stale, but it won't
 	// cause any deadlocks
-	for _, conn := range(conns) {
+	for _, conn := range conns {
 		conn.shutdown <- true
 	}
 }
