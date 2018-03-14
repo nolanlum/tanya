@@ -79,6 +79,8 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 	}
 	defer l.Close()
 
+    log.Printf("IRC server now listening on %v", addr)
+
 	for {
 		conn, err := l.AcceptTCP()
 		if err != nil {
