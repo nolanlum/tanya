@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
 
 	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
@@ -64,12 +63,7 @@ func main() {
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)
 	go killHandler(killSignalChan, stopChan)
-	signal.Notify(killSignalChan, os.Kill)
-	// Windows does not support the Interrupt signal
-	if runtime.GOOS != "windows" {
-		signal.Notify(killSignalChan, os.Interrupt)
-	}
-
+	signal.Notify(killSignalChan, os.Interrupt)
 	log.Println("starting tanya")
 
 	slackIncomingChan := make(chan *gateway.SlackEvent)
