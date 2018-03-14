@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"time"
 
 	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
@@ -15,10 +14,9 @@ import (
 func killHandler(sigChan <-chan os.Signal, mLoopChan chan<- bool, slackChan chan<- bool, ircChan chan<- bool) {
 	<-sigChan
 	log.Println("stopping connections and goroutines")
-	mLoopChan <- true
 	slackChan <- true
 	ircChan <- true
-	time.Sleep(100 * time.Millisecond)
+	mLoopChan <- true	
 	log.Println("tanya shutting down")
 	os.Exit(1)
 }
@@ -39,10 +37,10 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 }
 
 func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan bool) {
-	for {
+	Loop: for {
 		select {
 		case <-stopChan:
-			break
+			break Loop
 		case msg := <-recvChan:
 			switch msg.EventType {
 			case gateway.MessageEvent:
@@ -52,9 +50,8 @@ func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.
 				n := slackToNick(msg.Data.(*gateway.NickChangeEventData))
 				sendChan <- n.ToMessage()
 			}
-		default:
-			continue
 		}
+		
 	}
 }
 
