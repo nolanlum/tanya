@@ -11,7 +11,7 @@ const (
 	PartEvent
 )
 
-// A gateway SlackEvent is an event from Slack that should be communicated
+// A SlackEvent is an event from Slack that should be communicated
 // to any connected IRC clients
 type SlackEvent struct {
 	EventType SlackEventType

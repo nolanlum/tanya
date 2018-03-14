@@ -23,6 +23,7 @@ func (p *Privmsg) ToMessage() *Message {
 	}
 }
 
+// Nick represents a IRC user nick change event
 type Nick struct {
 	From    string
 	NewNick string

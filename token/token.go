@@ -21,6 +21,8 @@ type loginResponseFull struct {
 	slack.SlackResponse
 }
 
+// GetSlackToken interactively prompts the user and obtains a slack token
+// by authenticating against the Slack API.
 func GetSlackToken() (string, error) {
 	var domain, email string
 
