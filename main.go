@@ -11,12 +11,10 @@ import (
 	"github.com/nolanlum/tanya/irc"
 )
 
-func killHandler(sigChan <-chan os.Signal, mLoopChan chan<- bool, slackChan chan<- bool, ircChan chan<- bool) {
+func killHandler(sigChan <-chan os.Signal, stopChan chan<- bool) {
 	<-sigChan
 	log.Println("stopping connections and goroutines")
-	slackChan <- true
-	ircChan <- true
-	mLoopChan <- true	
+	close(stopChan)
 }
 
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
@@ -60,13 +58,14 @@ func main() {
 	}
 
 
-	stopSlackChan := make(chan bool)
-	stopIrcChan := make(chan bool)
-	stopMessageLoopChan := make(chan bool)
+	stopChan := make(chan bool)
+	// stopSlackChan := make(chan bool)
+	// stopIrcChan := make(chan bool)
+	// stopMessageLoopChan := make(chan bool)
 
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)
-	go killHandler(killSignalChan, stopMessageLoopChan, stopSlackChan, stopIrcChan)
+	go killHandler(killSignalChan, stopChan)
 	signal.Notify(killSignalChan, os.Kill)
 	// Windows does not support the Interrupt signal
 	if runtime.GOOS != "windows" {
@@ -80,15 +79,15 @@ func main() {
 	slackClient.Initialize(conf.Slack.Token)
 	go slackClient.Poop(&gateway.ClientChans{
 		IncomingChan: slackIncomingChan,
-		StopChan: stopSlackChan,
+		StopChan: stopChan,
 	})
 
 	ircOutgoingChan := make(chan *irc.Message)
-	ircServer := irc.NewServer(stopIrcChan)
+	ircServer := irc.NewServer(stopChan)
 	go ircServer.Listen(&net.TCPAddr{Port: 6667})
 	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
 
 	log.Println("tanya ready for connections")
-	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopMessageLoopChan)
+	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan)
 	log.Println("tanya shutting down")
 }
