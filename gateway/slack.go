@@ -165,7 +165,6 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 	for {
 		select {
 		case <-chans.StopChan:
-			log.Println("i am slack and this is goodbye")
 			return
 
 		default:

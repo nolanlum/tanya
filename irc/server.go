@@ -42,14 +42,13 @@ func (cc *clientConnection) handleConnInput() {
 		} else {
 			fmt.Fprintln(cc.conn, msg)
 		}
-	}			
+	}
 }
 
 func (cc *clientConnection) handleConnOutput() {
 	for {
 		select {
 		case <-cc.shutdown:
-			log.Println("shutting handleConnOutput down")
 			return
 
 		case message := <-cc.outgoingMessages:
@@ -93,7 +92,6 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 				// If we are trying to accept from a closed socket that means
 				// the socket was closed from underneath us, so there's no point
 				// logging
-				log.Println("stopping the listen loop")
 				break
 			} else {
 				log.Fatal(err)
@@ -125,12 +123,10 @@ func (s *Server) waitForClientCleanup(cc *clientConnection) {
 
 func (s *Server) waitForkillListener(l *net.TCPListener) {
 	<-s.stopChan
-	log.Println("hulllooo")
 	l.Close()
 
 	s.RLock()
 	for _, conn := range(s.clientConnections) {
-		log.Println("shutting down client connection")
 		conn.shutdown <- true
 	}
 	s.RUnlock()

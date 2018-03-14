@@ -14,7 +14,7 @@ import (
 
 func killHandler(sigChan <-chan os.Signal, mLoopChan chan<- bool, slackChan chan<- bool, ircChan chan<- bool) {
 	<-sigChan
-	log.Println("stopping connections and goroutines")	
+	log.Println("stopping connections and goroutines")
 	mLoopChan <- true
 	slackChan <- true
 	ircChan <- true
@@ -69,13 +69,16 @@ func main() {
 	stopIrcChan := make(chan bool)
 	stopMessageLoopChan := make(chan bool)
 
-	// Setup our stop handling	
+	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)
 	go killHandler(killSignalChan, stopMessageLoopChan, stopSlackChan, stopIrcChan)
+	signal.Notify(killSignalChan, os.Kill)
 	// Windows does not support the Interrupt signal
 	if runtime.GOOS != "windows" {
 		signal.Notify(killSignalChan, os.Interrupt)
 	}
+
+	log.Println("starting tanya")
 
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
