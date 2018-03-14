@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -60,14 +61,16 @@ func (cc *clientConnection) handleConnOutput() {
 // and fanning out Slack events as necessary
 type Server struct {
 	clientConnections map[net.Addr]*clientConnection
+	stopChan          <-chan bool
 
 	sync.RWMutex
 }
 
 // NewServer creates a new IRC server
-func NewServer() *Server {
+func NewServer(stopChan <-chan bool) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
+		stopChan:          stopChan,
 	}
 }
 
@@ -82,9 +85,17 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 	log.Printf("IRC server now listening on %v", addr)
 
 	for {
+		go s.waitForkillListener(l)
 		conn, err := l.AcceptTCP()
 		if err != nil {
-			log.Fatal(err)
+			if strings.HasSuffix(err.Error(), "closed network connection") {
+				// If we are trying to accept from a closed socket that means
+				// the socket was closed from underneath us, so there's no point
+				// logging
+				break
+			} else {
+				log.Fatal(err)
+			}
 		}
 
 		log.Printf("IRC client connected: %v", conn.RemoteAddr())
@@ -108,6 +119,25 @@ func (s *Server) waitForClientCleanup(cc *clientConnection) {
 	s.Lock()
 	delete(s.clientConnections, cc.conn.RemoteAddr())
 	s.Unlock()
+}
+
+func (s *Server) waitForkillListener(l *net.TCPListener) {
+	<-s.stopChan
+	l.Close()
+
+	// First grab the lock and grab the active connections
+	conns := make([]*clientConnection, 0)
+	s.RLock()
+	for _, conn := range s.clientConnections {
+		conns = append(conns, conn)
+	}
+	s.RUnlock()
+
+	// Now try to close them. This list could be stale, but it won't
+	// cause any deadlocks
+	for _, conn := range conns {
+		close(conn.shutdown)
+	}
 }
 
 // HandleOutgoingMessageRouting handles fanning out IRC messages generated from Slack events
