@@ -17,8 +17,6 @@ func killHandler(sigChan <-chan os.Signal, mLoopChan chan<- bool, slackChan chan
 	slackChan <- true
 	ircChan <- true
 	mLoopChan <- true	
-	log.Println("tanya shutting down")
-	os.Exit(1)
 }
 
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
@@ -92,4 +90,5 @@ func main() {
 
 	log.Println("tanya ready for connections")
 	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopMessageLoopChan)
+	log.Println("tanya shutting down")
 }
