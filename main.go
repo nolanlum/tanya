@@ -58,10 +58,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Stop channel
 	stopChan := make(chan bool)
-	// stopSlackChan := make(chan bool)
-	// stopIrcChan := make(chan bool)
-	// stopMessageLoopChan := make(chan bool)
 
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)
