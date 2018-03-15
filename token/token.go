@@ -76,5 +76,9 @@ func GetSlackToken() (string, error) {
 		return "", err
 	}
 
+	if !loginResponse.Ok {
+		return "", errors.New(loginResponse.Error)
+	}
+
 	return loginResponse.Token, nil
 }
