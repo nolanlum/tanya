@@ -47,6 +47,7 @@ func initializeConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 	if err := toml.NewEncoder(f).Encode(conf); err != nil {
 		return nil, err
 	}
