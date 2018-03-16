@@ -10,7 +10,7 @@ import (
 	"github.com/nolanlum/tanya/irc"
 )
 
-func killHandler(sigChan <-chan os.Signal, stopChan chan<- bool) {
+func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	<-sigChan
 	log.Println("stopping connections and goroutines")
 	close(stopChan)
@@ -31,7 +31,7 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 	}
 }
 
-func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan bool) {
+func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan interface{}) {
 Loop:
 	for {
 		select {
@@ -58,7 +58,7 @@ func main() {
 	}
 
 	// Stop channel
-	stopChan := make(chan bool)
+	stopChan := make(chan interface{})
 
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)

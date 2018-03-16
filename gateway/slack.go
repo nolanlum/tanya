@@ -140,7 +140,7 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 type ClientChans struct {
 	OutgoingChan <-chan string
 	IncomingChan chan<- *SlackEvent
-	StopChan     <-chan bool
+	StopChan     <-chan interface{}
 }
 
 // Initialize bootstraps the SlackClient with a client token and loads data

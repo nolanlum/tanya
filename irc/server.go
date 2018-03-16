@@ -61,13 +61,13 @@ func (cc *clientConnection) handleConnOutput() {
 // and fanning out Slack events as necessary
 type Server struct {
 	clientConnections map[net.Addr]*clientConnection
-	stopChan          <-chan bool
+	stopChan          <-chan interface{}
 
 	sync.RWMutex
 }
 
 // NewServer creates a new IRC server
-func NewServer(stopChan <-chan bool) *Server {
+func NewServer(stopChan <-chan interface{}) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
 		stopChan:          stopChan,
