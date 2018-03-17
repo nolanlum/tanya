@@ -45,7 +45,7 @@ func GetSlackToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if findTeamResponse.SSO == true {
+	if findTeamResponse.SSO {
 		return "", errors.New("SSO teams not yet supported")
 	}
 
