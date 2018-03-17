@@ -13,8 +13,9 @@ before_script:
   - PATH=$HOME/gometalinter-${GOMETALINTER_VER}-linux-amd64:$PATH
 
 script:
-  - gometalinter --help
+  - go test -v -race ./...
   - >-
       gometalinter --disable-all --vendor 
-      --enable=errcheck --enable=gofmt --enable=vet --enable=vetshadow
+      --enable=goimports --enable=gofmt --enable=vet --enable=vetshadow --enable=golint
+      --enable=ineffassign --enable=megacheck
       ./...
