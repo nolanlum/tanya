@@ -7,4 +7,6 @@ before_script:
   - go get -u github.com/alecthomas/gometalinter                # Linter
 
 script:
-  - gometalinter ./...
+  - gometalinter --install
+  - gometalinter --help
+  - gometalinter --disable-all --enable=errcheck --enable=vet --enable=vetshadow ./...
