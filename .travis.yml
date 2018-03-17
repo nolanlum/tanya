@@ -14,7 +14,7 @@ before_script:
 script:
   - go test -v -race ./...
   - >-
-      gometalinter --disable-all --vendor 
+      gometalinter --disable-all --vendor
       --enable=goimports --enable=gofmt --enable=vet --enable=vetshadow --enable=golint
       --enable=ineffassign --enable=megacheck
       ./...
