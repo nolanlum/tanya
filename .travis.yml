@@ -4,10 +4,16 @@ go:
 
 before_script:
   - GO_FILES=$(find . -iname '*.go' -type f | grep -v /vendor/) # All the .go files, excluding vendor/
-  - GOMETALINTER=https://github.com/alecthomas/gometalinter/releases/download/v2.0.5/gometalinter-2.0.5-linux-amd64.tar.gz
-  - pushd $HOME && wget $GOMETALINTER && tar -xzvf *.tar.gz     # Linter
+  - GOMETALINTER_VER=2.0.5
+  - > pushd $HOME && 
+      wget https://github.com/alecthomas/gometalinter/releases/download/v$(GOMETALINTER_VER)/gometalinter-$(GOMETALINTER_VER)-linux-amd64.tar.gz &&
+      tar -xzvf gometalinter-$(GOMETALINTER_VER)-linux-amd64.tar.gz &&
+      popd
+  - PATH=$HOME/gometalinter-$(GOMETALINTER_VER)-linux-amd64:$PATH
 
 script:
   - gometalinter --install
-  - gometalinter --help
-  - gometalinter --disable-all --enable=errcheck --enable=vet --enable=vetshadow ./...
+  - $HOME/gometalinter-$(GOMETALINTER_VER)-linux-amd64/gometalinter --help
+  - > gometalinter --disable-all --vendor 
+      --enable=errcheck --enable=gofmt --enable=vet --enable=vetshadow
+      ./...
