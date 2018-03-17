@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net"
 	"os"
 	"os/signal"
 
@@ -16,9 +15,13 @@ func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	close(stopChan)
 }
 
+func slackUserToIRCUser(s *gateway.SlackUser) irc.User {
+	return irc.User{Nick: s.Nick, Ident: s.SlackID}
+}
+
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 	return &irc.Privmsg{
-		From:    m.Nick,
+		From:    slackUserToIRCUser(&m.From),
 		Channel: m.Target,
 		Message: m.Message,
 	}
@@ -26,7 +29,7 @@ func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 
 func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 	return &irc.Nick{
-		From:    n.OldNick,
+		From:    slackUserToIRCUser(&n.From),
 		NewNick: n.NewNick,
 	}
 }
@@ -68,15 +71,20 @@ func main() {
 
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
-	slackClient.Initialize(conf.Slack.Token)
+	slackUser, err := slackClient.Initialize(conf.Slack.Token, conf.Slack.UserID)
+	if err != nil {
+		log.Fatal(err)
+	}
 	go slackClient.Poop(&gateway.ClientChans{
 		IncomingChan: slackIncomingChan,
 		StopChan:     stopChan,
 	})
+	log.Printf("tanya logged into slack as %+v\n", slackUser)
 
 	ircOutgoingChan := make(chan *irc.Message)
-	ircServer := irc.NewServer(stopChan)
-	go ircServer.Listen(&net.TCPAddr{Port: 6667})
+	ircServer := irc.NewServer(&conf.IRC, stopChan)
+	ircServer.SetSelfInfo(slackUserToIRCUser(slackUser))
+	go ircServer.Listen()
 	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
 
 	log.Println("tanya ready for connections")

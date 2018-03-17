@@ -13,6 +13,10 @@ const (
 	NickCmd Command = iota
 	UserCmd
 	PrivmsgCmd
+	PingCmd
+	PongCmd
+
+	NumericReplyCmd
 )
 
 // Message corresponds to an IRC message
@@ -26,6 +30,10 @@ var cmdToStrMap = map[Command]string{
 	NickCmd:    "NICK",
 	UserCmd:    "USER",
 	PrivmsgCmd: "PRIVMSG",
+	PingCmd:    "PING",
+	PongCmd:    "PONG",
+
+	NumericReplyCmd: "",
 }
 
 func (m *Message) String() string {
@@ -38,10 +46,12 @@ func (m *Message) String() string {
 	if m.Prefix != "" {
 		b.WriteString(":")
 		b.WriteString(m.Prefix)
-		b.WriteString(" ")
 	}
 
-	b.WriteString(s)
+	if len(s) > 0 {
+		b.WriteString(" ")
+		b.WriteString(s)
+	}
 
 	for i, p := range m.Params {
 		b.WriteString(" ")
@@ -71,9 +81,6 @@ var ErrMalformedIRCMessage = errors.New("malformed IRC message")
 // and returns a Message corresponding to the line
 func StringToMessage(str string) (*Message, error) {
 	splitStr := strings.Split(str, " ")
-	if len(splitStr) < 1 {
-		return nil, ErrMalformedIRCMessage
-	}
 
 	var cmdStr string
 	var prefix string
@@ -102,12 +109,23 @@ func StringToMessage(str string) (*Message, error) {
 
 	switch cmdStr {
 	case "USER":
+		if len(params) < 4 {
+			return nil, ErrNeedMoreParams("", "USER")
+		}
 		return &Message{prefix, UserCmd, params}, nil
 	case "NICK":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("", "NICK")
+		}
 		return &Message{prefix, NickCmd, params}, nil
 	case "PRIVMSG":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("", "PRIVMSG")
+		}
 		return &Message{prefix, PrivmsgCmd, params}, nil
+	case "PING":
+		return &Message{prefix, PingCmd, params}, nil
 	default:
-		return nil, errors.New(splitStr[0] + " is not a valid IRC command")
+		return nil, ErrUnknownCommand("", cmdStr)
 	}
 }

@@ -1,6 +1,18 @@
 # config.toml example
 
+[irc]
+
+# Listen address
+ListenAddr = ":6667"
+
+# Message of the Day
+MOTD = """
+haha !sux sonzai x"""
+
 [slack]
 
 # Slack client token
 token = ""
+
+# Slack user ID
+userID = ""

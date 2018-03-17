@@ -21,13 +21,13 @@ type SlackEvent struct {
 // MessageEventData represents a textual message which should
 // be delivered to IRC clients
 type MessageEventData struct {
-	Nick    string
+	From    SlackUser
 	Target  string
 	Message string
 }
 
 // NickChangeEventData represents a Slack user changing their display name
 type NickChangeEventData struct {
-	OldNick string
+	From    SlackUser
 	NewNick string
 }

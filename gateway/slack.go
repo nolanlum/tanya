@@ -31,6 +31,8 @@ type SlackUser struct {
 	RealName string
 }
 
+var tanyaInternalUser = &SlackUser{SlackID: "tanya", Nick: "*tanya"}
+
 func slackUserFromDto(user *slack.User) *SlackUser {
 	// !sux slack
 	nick := user.Profile.DisplayNameNormalized
@@ -49,6 +51,7 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 type SlackClient struct {
 	client *slack.Client
 	rtm    *slack.RTM
+	self   *SlackUser
 
 	channelInfo map[string]*SlackChannel
 	userInfo    map[string]*SlackUser
@@ -144,16 +147,20 @@ type ClientChans struct {
 }
 
 // Initialize bootstraps the SlackClient with a client token and loads data
-func (sc *SlackClient) Initialize(token string) {
+func (sc *SlackClient) Initialize(token, userID string) (*SlackUser, error) {
 	sc.client = slack.New(token)
 	sc.rtm = sc.client.NewRTM()
 	sc.bootstrapMappings()
+
+	var err error
+	sc.self, err = sc.ResolveUser(userID)
+	return sc.self, err
 }
 
-func newSlackMessageEvent(nick, target, message string) *SlackEvent {
+func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
 	return &SlackEvent{
 		EventType: MessageEvent,
-		Data:      &MessageEventData{nick, target, message},
+		Data:      &MessageEventData{*from, target, message},
 	}
 }
 
@@ -174,7 +181,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				messageData, ok := event.Data.(*slack.MessageEvent)
 				if !ok {
 					chans.IncomingChan <- newSlackMessageEvent(
-						"*tanya", "*tanya", fmt.Sprintf("Non message-event: %+v", event.Data))
+						tanyaInternalUser, "*tanya", fmt.Sprintf("Non message-event: %+v", event.Data))
 					break
 				}
 
@@ -193,7 +200,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 					if messageData.Text != "" {
 						chans.IncomingChan <- newSlackMessageEvent(
-							user.Nick, channel.Name, sc.ParseMessageText(messageData.Text))
+							user, channel.Name, sc.ParseMessageText(messageData.Text))
 
 						if messageData.Text == "hallo!" {
 							sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage("hullo!", messageData.Channel))
@@ -203,20 +210,20 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
 							chans.IncomingChan <- newSlackMessageEvent(
-								user.Nick, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
+								user, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
 						}
 					}
 
 				default:
 					chans.IncomingChan <- newSlackMessageEvent(
-						"*tanya", "*tanya", fmt.Sprintf("%v: %+v", event.Type, event.Data))
+						tanyaInternalUser, sc.self.Nick, fmt.Sprintf("%v: %+v", event.Type, event.Data))
 				}
 
 			case "user_change":
 				userData, ok := event.Data.(*slack.UserChangeEvent)
 				if !ok {
 					chans.IncomingChan <- newSlackMessageEvent(
-						"*tanya", "*tanya", fmt.Sprintf("Non userchange-event: %+v", event.Data))
+						tanyaInternalUser, sc.self.Nick, fmt.Sprintf("Non userchange-event: %+v", event.Data))
 					break
 				}
 
@@ -230,7 +237,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					chans.IncomingChan <- &SlackEvent{
 						EventType: NickChangeEvent,
 						Data: &NickChangeEventData{
-							OldNick: oldUserInfo.Nick,
+							From:    *oldUserInfo,
 							NewNick: newUserInfo.Nick,
 						},
 					}
@@ -241,7 +248,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			default:
 				chans.IncomingChan <- newSlackMessageEvent(
-					"*tanya", "*tanya", fmt.Sprintf("%v: %+v", event.Type, event.Data))
+					tanyaInternalUser, sc.self.Nick, fmt.Sprintf("%v: %+v", event.Type, event.Data))
 			}
 		}
 	}

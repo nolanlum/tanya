@@ -6,16 +6,19 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
+	"github.com/nolanlum/tanya/irc"
 	"github.com/nolanlum/tanya/token"
 )
 
 type slack struct {
-	Token string
+	Token  string
+	UserID string
 }
 
 // Config holds configuration data for Tanya
 type Config struct {
 	Slack slack
+	IRC   irc.Config
 }
 
 // LoadConfig parses a config if it exists, or generates a new one
@@ -35,12 +38,15 @@ func LoadConfig() (*Config, error) {
 // initializeConfig interactively generates and writes a config
 func initializeConfig() (*Config, error) {
 	var conf Config
-	token, err := token.GetSlackToken()
+	loginResponse, err := token.DoSlackLogin()
 	if err != nil {
 		return nil, err
 	}
 
-	conf.Slack.Token = token
+	conf.Slack.Token = loginResponse.Token
+	conf.Slack.UserID = loginResponse.UserID
+
+	conf.IRC.ListenAddr = ":6667"
 
 	fmt.Print("Writing config.toml...")
 	f, err := os.Create("config.toml")

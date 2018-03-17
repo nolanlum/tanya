@@ -1,6 +1,9 @@
 package token
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"syscall"
+)
 import "errors"
 import "fmt"
 import "io/ioutil"
@@ -16,14 +19,16 @@ type findTeamResponseFull struct {
 	slack.SlackResponse
 }
 
-type loginResponseFull struct {
-	Token string `json:"token"`
+type LoginResponse struct {
+	Token  string `json:"token"`
+	UserID string `json:"user"`
+	TeamID string `json:"team"`
 	slack.SlackResponse
 }
 
-// GetSlackToken interactively prompts the user and obtains a slack token
+// DoSlackLogin interactively prompts the user and obtains a slack token
 // by authenticating against the Slack API.
-func GetSlackToken() (string, error) {
+func DoSlackLogin() (*LoginResponse, error) {
 	var domain, email string
 
 	fmt.Print("Team domain (*.slack.com): ")
@@ -31,29 +36,29 @@ func GetSlackToken() (string, error) {
 
 	resp, err := http.PostForm("https://slack.com/api/auth.findTeam", url.Values{"domain": {domain}})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var findTeamResponse findTeamResponseFull
 	err = json.Unmarshal(body, &findTeamResponse)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if findTeamResponse.SSO == true {
-		return "", errors.New("SSO teams not yet supported")
+		return nil, errors.New("SSO teams not yet supported")
 	}
 
 	fmt.Print("Slack email: ")
 	fmt.Scanln(&email)
 
 	fmt.Print("Slack password: ")
-	passwordBytes, _ := terminal.ReadPassword(0)
+	passwordBytes, _ := terminal.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 
 	password := string(passwordBytes)
@@ -61,24 +66,24 @@ func GetSlackToken() (string, error) {
 	resp, err = http.PostForm("https://slack.com/api/auth.signin",
 		url.Values{"team": {findTeamResponse.TeamID}, "email": {email}, "password": {password}})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var loginResponse loginResponseFull
+	var loginResponse LoginResponse
 	err = json.Unmarshal(body, &loginResponse)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if !loginResponse.Ok {
-		return "", errors.New(loginResponse.Error)
+		return nil, errors.New(loginResponse.Error)
 	}
 
-	return loginResponse.Token, nil
+	return &loginResponse, nil
 }
