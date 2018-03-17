@@ -7,12 +7,12 @@ import (
 
 // TODO: Improve the testing here
 func TestStringToMessageUser(t *testing.T) {
-	msg, err := StringToMessage("USER a")
+	msg, err := StringToMessage("USER szi szi irc.szi.indojin :Sasuga Za Indojin")
 	if err != nil {
 		t.Error(err)
 	}
 	if msg.Cmd != UserCmd {
-		t.Error("Could not parse 'user a' as User command")
+		t.Error("Could not parse a User command")
 	}
 }
 
@@ -57,12 +57,12 @@ func TestStringToMessagePrivmsgWithTrailing(t *testing.T) {
 }
 
 func TestStringToMessageWithPrefix(t *testing.T) {
-	msg, err := StringToMessage(":hello USER a")
+	msg, err := StringToMessage(":hello NICK a")
 	if err != nil {
 		t.Error(err)
 	}
-	if msg.Cmd != UserCmd {
-		t.Error("Could not parse ':hello user a' as User command")
+	if msg.Cmd != NickCmd {
+		t.Error("Could not parse ':hello NICK a' as Nick command")
 	}
 }
 

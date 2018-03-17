@@ -19,6 +19,7 @@ type findTeamResponseFull struct {
 	slack.SlackResponse
 }
 
+// LoginResponse is the Slack API response from the auth.login endpoint.
 type LoginResponse struct {
 	Token  string `json:"token"`
 	UserID string `json:"user"`

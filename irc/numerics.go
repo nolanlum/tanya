@@ -9,6 +9,7 @@ import (
 // NumericCommand represents a numbered server reply
 type NumericCommand int
 
+//nolint: golint
 //noinspection GoSnakeCaseUsage
 const (
 	RPL_WELCOME  NumericCommand = 001
@@ -30,11 +31,10 @@ type NumericReply struct {
 	Params []string
 }
 
+// ToMessage turns a NumericReply into a message
 func (n *NumericReply) ToMessage() *Message {
 	params := []string{fmt.Sprintf("%03d", n.Code), fmt.Sprintf("%v", n.Target)}
-	for _, p := range n.Params {
-		params = append(params, p)
-	}
+	params = append(params, n.Params...)
 
 	return &Message{
 		Prefix: "tanya",

@@ -13,12 +13,10 @@ func (u User) String() string {
 	if len(u.Nick) > 0 && len(u.Ident) > 0 {
 		if len(u.Host) > 0 {
 			return fmt.Sprintf("%v!%v@%v", u.Nick, u.Ident, u.Host)
-		} else {
-			return fmt.Sprintf("%v!%v@localhost", u.Nick, u.Ident)
 		}
-	} else {
-		return ""
+		return fmt.Sprintf("%v!%v@localhost", u.Nick, u.Ident)
 	}
+	return ""
 }
 
 // Privmsg represents a line in an IRC conversation

@@ -43,13 +43,16 @@ func (m *Message) String() string {
 	}
 	var b strings.Builder
 
-	if m.Prefix != "" {
+	messageHasPrefix := m.Prefix != ""
+	if messageHasPrefix {
 		b.WriteString(":")
 		b.WriteString(m.Prefix)
 	}
 
-	if len(s) > 0 {
-		b.WriteString(" ")
+	if s != "" {
+		if messageHasPrefix {
+			b.WriteString(" ")
+		}
 		b.WriteString(s)
 	}
 
