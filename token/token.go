@@ -50,7 +50,7 @@ func DoSlackLogin() (*LoginResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	if findTeamResponse.SSO == true {
+	if findTeamResponse.SSO {
 		return nil, errors.New("SSO teams not yet supported")
 	}
 
