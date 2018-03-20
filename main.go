@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net"
 	"os"
 	"os/signal"
 
@@ -16,9 +15,13 @@ func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	close(stopChan)
 }
 
+func slackUserToIRCUser(s *gateway.SlackUser) irc.User {
+	return irc.User{Nick: s.Nick, Ident: s.SlackID}
+}
+
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 	return &irc.Privmsg{
-		From:    m.Nick,
+		From:    slackUserToIRCUser(&m.From),
 		Channel: m.Target,
 		Message: m.Message,
 	}
@@ -26,12 +29,17 @@ func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 
 func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 	return &irc.Nick{
-		From:    n.OldNick,
+		From:    slackUserToIRCUser(&n.From),
 		NewNick: n.NewNick,
 	}
 }
 
-func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan interface{}) {
+func writeMessageLoop(
+	recvChan <-chan *gateway.SlackEvent,
+	sendChan chan<- *irc.Message,
+	stopChan <-chan interface{},
+	server *irc.Server,
+) {
 Loop:
 	for {
 		select {
@@ -39,6 +47,13 @@ Loop:
 			break Loop
 		case msg := <-recvChan:
 			switch msg.EventType {
+			case gateway.SlackConnectedEvent:
+				// This is a state-changing event. Not 100% sure the main goroutine
+				// should be handling it but it doesn't make sense to have a separate
+				// server goroutine just for reconnected events, nor does it make sense
+				// to multiplex it onto sendChan.
+				b := msg.Data.(*gateway.SlackConnectedEventData)
+				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo))
 			case gateway.MessageEvent:
 				p := slackToPrivmsg(msg.Data.(*gateway.MessageEventData))
 				sendChan <- p.ToMessage()
@@ -47,7 +62,6 @@ Loop:
 				sendChan <- n.ToMessage()
 			}
 		}
-
 	}
 }
 
@@ -69,17 +83,20 @@ func main() {
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
 	slackClient.Initialize(conf.Slack.Token)
+	if err != nil {
+		log.Fatal(err)
+	}
 	go slackClient.Poop(&gateway.ClientChans{
 		IncomingChan: slackIncomingChan,
 		StopChan:     stopChan,
 	})
 
 	ircOutgoingChan := make(chan *irc.Message)
-	ircServer := irc.NewServer(stopChan)
-	go ircServer.Listen(&net.TCPAddr{Port: 6667})
+	ircServer := irc.NewServer(&conf.IRC, stopChan)
+	go ircServer.Listen()
 	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
 
 	log.Println("tanya ready for connections")
-	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan)
+	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan, ircServer)
 	log.Println("tanya shutting down")
 }

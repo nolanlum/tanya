@@ -1,6 +1,9 @@
 package token
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"syscall"
+)
 import "errors"
 import "fmt"
 import "io/ioutil"
@@ -53,7 +56,7 @@ func GetSlackToken() (string, error) {
 	fmt.Scanln(&email)
 
 	fmt.Print("Slack password: ")
-	passwordBytes, _ := terminal.ReadPassword(0)
+	passwordBytes, _ := terminal.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 
 	password := string(passwordBytes)

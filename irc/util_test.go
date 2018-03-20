@@ -8,14 +8,14 @@ import (
 func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
 	p := &Privmsg{
-		From:    "poop",
+		From:    User{"poop", "poopser", ""},
 		Channel: "#chatter-technical",
 		Message: msgStr,
 	}
 
 	m := p.ToMessage()
 
-	if m.Prefix != "poop!poop@localhost" {
+	if m.Prefix != "poop!poopser@localhost" {
 		t.Error("Did not generate prefix corectly")
 	}
 	if m.Cmd != PrivmsgCmd {
@@ -34,7 +34,6 @@ func TestToMessage(t *testing.T) {
 
 func TestToMessageEmptyPrefix(t *testing.T) {
 	p := &Privmsg{
-		From:    "",
 		Channel: "chatter-technical",
 		Message: "hi im a poop",
 	}
@@ -51,7 +50,7 @@ func TestToMessageEmptyPrefix(t *testing.T) {
 
 func TestNick_ToMessage(t *testing.T) {
 	type fields struct {
-		From    string
+		From    User
 		NewNick string
 	}
 	tests := []struct {
@@ -61,7 +60,7 @@ func TestNick_ToMessage(t *testing.T) {
 	}{
 		{
 			"no prefix",
-			fields{"", "czi"},
+			fields{User{}, "czi"},
 			&Message{
 				"",
 				NickCmd,
@@ -70,9 +69,9 @@ func TestNick_ToMessage(t *testing.T) {
 		},
 		{
 			"with prefix",
-			fields{"asid", "czi"},
+			fields{User{"asid", "acid", ""}, "czi"},
 			&Message{
-				"asid!asid@localhost",
+				"asid!acid@localhost",
 				NickCmd,
 				[]string{"czi"},
 			},

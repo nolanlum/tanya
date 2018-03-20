@@ -1,61 +1,11 @@
 package irc
 
 import (
-	"bufio"
-	"fmt"
 	"log"
 	"net"
 	"strings"
 	"sync"
 )
-
-type clientConnection struct {
-	conn *net.TCPConn
-
-	outgoingMessages chan *Message
-	shutdown         chan interface{}
-}
-
-func newClientConnection(conn *net.TCPConn) *clientConnection {
-	return &clientConnection{
-		conn: conn,
-
-		outgoingMessages: make(chan *Message),
-		shutdown:         make(chan interface{}),
-	}
-}
-
-func (cc *clientConnection) handleConnInput() {
-	defer func() {
-		close(cc.shutdown)
-		cc.conn.Close()
-	}()
-
-	s := bufio.NewScanner(cc.conn)
-	for s.Scan() {
-		// Reads a line with s.Text() and parses it as
-		// an IRC message
-		msg, err := StringToMessage(s.Text())
-		if err != nil {
-			// TODO: make this an actual IRC error
-			fmt.Fprintln(cc.conn, "malformed IRC message")
-		} else {
-			fmt.Fprintln(cc.conn, msg)
-		}
-	}
-}
-
-func (cc *clientConnection) handleConnOutput() {
-	for {
-		select {
-		case <-cc.shutdown:
-			return
-
-		case message := <-cc.outgoingMessages:
-			fmt.Fprintln(cc.conn, message.String())
-		}
-	}
-}
 
 // Server represents the IRC server listener for bridging IRC clients to Slack
 // and fanning out Slack events as necessary
@@ -63,19 +13,29 @@ type Server struct {
 	clientConnections map[net.Addr]*clientConnection
 	stopChan          <-chan interface{}
 
+	selfUser User
+	config   *Config
+
 	sync.RWMutex
 }
 
 // NewServer creates a new IRC server
-func NewServer(stopChan <-chan interface{}) *Server {
+func NewServer(config *Config, stopChan <-chan interface{}) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
 		stopChan:          stopChan,
+
+		config: config,
 	}
 }
 
-// Listen for and accept incoming connections on the given address.
-func (s *Server) Listen(addr *net.TCPAddr) {
+// Listen for and accept incoming connections on the configured address.
+func (s *Server) Listen() {
+	addr, err := net.ResolveTCPAddr("tcp", s.config.ListenAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	l, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		log.Fatal(err)
@@ -85,7 +45,7 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 	log.Printf("IRC server now listening on %v", addr)
 
 	for {
-		go s.waitForkillListener(l)
+		go s.waitForKillListener(l)
 		conn, err := l.AcceptTCP()
 		if err != nil {
 			if strings.HasSuffix(err.Error(), "closed network connection") {
@@ -98,8 +58,8 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 			}
 		}
 
-		log.Printf("IRC client connected: %v", conn.RemoteAddr())
-		cc := newClientConnection(conn)
+		cc := newClientConnection(conn, &s.selfUser, s.config)
+		log.Printf("IRC client connected: %v", cc)
 
 		s.Lock()
 		s.clientConnections[conn.RemoteAddr()] = cc
@@ -114,14 +74,14 @@ func (s *Server) Listen(addr *net.TCPAddr) {
 func (s *Server) waitForClientCleanup(cc *clientConnection) {
 	<-cc.shutdown
 
-	log.Printf("IRC client disconnected: %v", cc.conn.RemoteAddr())
+	log.Printf("IRC client disconnected: %v", cc)
 
 	s.Lock()
 	delete(s.clientConnections, cc.conn.RemoteAddr())
 	s.Unlock()
 }
 
-func (s *Server) waitForkillListener(l *net.TCPListener) {
+func (s *Server) waitForKillListener(l *net.TCPListener) {
 	<-s.stopChan
 	l.Close()
 
@@ -148,6 +108,28 @@ func (s *Server) HandleOutgoingMessageRouting(outgoingMessages <-chan *Message) 
 		s.RLock()
 		for _, v := range s.clientConnections {
 			v.outgoingMessages <- message
+		}
+		s.RUnlock()
+	}
+}
+
+// HandleConnectBurst handles the initial burst of data from a
+// freshly established Slack connection.
+//
+// Sets the IRC user info for the gateway user and informs clients.
+func (s *Server) HandleConnectBurst(selfUser User) {
+	oldSelfUser := s.selfUser
+	s.selfUser = selfUser
+
+	if oldSelfUser != selfUser {
+		nickChangeMessage := (&Nick{
+			From:    oldSelfUser,
+			NewNick: selfUser.Nick,
+		}).ToMessage()
+
+		s.RLock()
+		for _, v := range s.clientConnections {
+			v.outgoingMessages <- nickChangeMessage
 		}
 		s.RUnlock()
 	}
