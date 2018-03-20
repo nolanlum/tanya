@@ -121,32 +121,32 @@ func StringToMessage(str string) (*Message, error) {
 	switch cmdStr {
 	case "USER":
 		if len(params) < 4 {
-			return nil, ErrNeedMoreParams("", "USER")
+			return nil, ErrNeedMoreParams("USER")
 		}
 		return &Message{prefix, UserCmd, params}, nil
 	case "NICK":
 		if len(params) < 1 {
-			return nil, ErrNeedMoreParams("", "NICK")
+			return nil, ErrNeedMoreParams("NICK")
 		}
 		return &Message{prefix, NickCmd, params}, nil
 	case "PRIVMSG":
 		if len(params) < 1 {
-			return nil, ErrNeedMoreParams("", "PRIVMSG")
+			return nil, ErrNeedMoreParams("PRIVMSG")
 		}
 		return &Message{prefix, PrivmsgCmd, params}, nil
 	case "JOIN":
 		if len(params) < 1 {
-			return nil, ErrNeedMoreParams("", "JOIN")
+			return nil, ErrNeedMoreParams("JOIN")
 		}
 		return &Message{prefix, JoinCmd, params}, nil
 	case "PART":
 		if len(params) < 1 {
-			return nil, ErrNeedMoreParams("", "PART")
+			return nil, ErrNeedMoreParams("PART")
 		}
 		return &Message{prefix, PartCmd, params}, nil
 	case "PING":
 		return &Message{prefix, PingCmd, params}, nil
 	default:
-		return nil, ErrUnknownCommand("", cmdStr)
+		return nil, ErrUnknownCommand(cmdStr)
 	}
 }

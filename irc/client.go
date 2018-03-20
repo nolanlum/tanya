@@ -64,8 +64,7 @@ func (cc *clientConnection) handleConnInput() {
 			if err == ErrMalformedIRCMessage {
 				log.Printf("[%v] sent malformed IRC message: %v", cc, msgStr)
 			} else if numeric, ok := err.(*NumericReply); ok {
-				numeric.Target = cc.clientUser.Nick
-				fmt.Fprintln(cc.conn, numeric.ToMessage().String())
+				fmt.Fprintln(cc.conn, cc.reply(*numeric).String())
 			} else {
 				log.Printf("[%v] error: %v", cc, err)
 			}
@@ -129,25 +128,28 @@ func (cc *clientConnection) handleConnOutput() {
 	}
 }
 
-func (cc *clientConnection) reply(code NumericCommand, params []string) *Message {
-	return (&NumericReply{
-		Code:   code,
-		Target: cc.clientUser.Nick,
-		Params: params,
-	}).ToMessage()
+func (cc *clientConnection) reply(reply NumericReply) *Message {
+	reply.ServerName = cc.config.ServerName
+	reply.Target = cc.clientUser.Nick
+	return reply.ToMessage()
 }
 
 func (cc *clientConnection) sendWelcome() {
 	messages := []*Message{
-		cc.reply(
-			RPL_WELCOME, []string{fmt.Sprintf("Welcome to the tanya Slack IRC Gateway %v", cc.clientUser)}),
-		cc.reply(RPL_YOURHOST, []string{"Your host is tanya, running SalarymanOS 9.0"}),
+		cc.reply(NumericReply{
+			Code:   RPL_WELCOME,
+			Params: []string{fmt.Sprintf("Welcome to the tanya Slack IRC Gateway %v", cc.clientUser)},
+		}),
+		cc.reply(NumericReply{
+			Code:   RPL_YOURHOST,
+			Params: []string{"Your host is tanya, running SalarymanOS 9.0"},
+		}),
 	}
 
 	for _, m := range messages {
 		cc.outgoingMessages <- m
 	}
-	for _, m := range MOTDAsNumerics(cc.clientUser.Nick, cc.config.MOTD) {
-		cc.outgoingMessages <- m.ToMessage()
+	for _, m := range MOTDAsNumerics(cc.config.MOTD) {
+		cc.outgoingMessages <- cc.reply(*m)
 	}
 }

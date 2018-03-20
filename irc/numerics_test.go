@@ -7,9 +7,10 @@ import (
 
 func TestNumericReply_ToMessage(t *testing.T) {
 	type fields struct {
-		Code   NumericCommand
-		Target string
-		Params []string
+		Code       NumericCommand
+		Params     []string
+		ServerName string
+		Target     string
 	}
 	tests := []struct {
 		name   string
@@ -19,12 +20,13 @@ func TestNumericReply_ToMessage(t *testing.T) {
 		{
 			name: "welcome message",
 			fields: fields{
-				Code:   RPL_WELCOME,
-				Target: "papika",
-				Params: []string{"Welcome to the tanya Slack IRC gateway papika"},
+				Code:       RPL_WELCOME,
+				Params:     []string{"Welcome to the tanya Slack IRC gateway papika"},
+				ServerName: "irc.tanya.isekai",
+				Target:     "papika",
 			},
 			want: &Message{
-				Prefix: "tanya",
+				Prefix: "irc.tanya.isekai",
 				Cmd:    NumericReplyCmd,
 				Params: []string{"001", "papika", "Welcome to the tanya Slack IRC gateway papika"},
 			},
@@ -32,12 +34,13 @@ func TestNumericReply_ToMessage(t *testing.T) {
 		{
 			name: "unknown command",
 			fields: fields{
-				Code:   ERR_UNKNOWNCOMMAND,
-				Target: "papika",
-				Params: []string{"POOP", "Unknown command"},
+				Code:       ERR_UNKNOWNCOMMAND,
+				Params:     []string{"POOP", "Unknown command"},
+				ServerName: "irc.tanya.isekai",
+				Target:     "papika",
 			},
 			want: &Message{
-				Prefix: "tanya",
+				Prefix: "irc.tanya.isekai",
 				Cmd:    NumericReplyCmd,
 				Params: []string{"421", "papika", "POOP", "Unknown command"},
 			},
@@ -46,9 +49,10 @@ func TestNumericReply_ToMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bn := &NumericReply{
-				Code:   tt.fields.Code,
-				Target: tt.fields.Target,
-				Params: tt.fields.Params,
+				Code:       tt.fields.Code,
+				Params:     tt.fields.Params,
+				ServerName: tt.fields.ServerName,
+				Target:     tt.fields.Target,
 			}
 			if got := bn.ToMessage(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NumericReply.ToMessage() = \"%v\", want \"%v\"", got, tt.want)
@@ -95,10 +99,9 @@ func TestNumericReply_Error(t *testing.T) {
 func TestErrUnknownCommand(t *testing.T) {
 	want := &NumericReply{
 		Code:   ERR_UNKNOWNCOMMAND,
-		Target: "papika",
 		Params: []string{"POOP", "Unknown command"},
 	}
-	got := ErrUnknownCommand("papika", "POOP")
+	got := ErrUnknownCommand("POOP")
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ErrUnknownCommand() = %v, want %v", got, want)
