@@ -43,12 +43,12 @@ func LoadConfig() (*Config, error) {
 func initializeConfig() (*Config, error) {
 	var conf Config
 	conf.SetDefaults()
-	loginResponse, err := token.DoSlackLogin()
+	slackToken, err := token.GetSlackToken()
 	if err != nil {
 		return nil, err
 	}
 
-	conf.Slack.Token = loginResponse.Token
+	conf.Slack.Token = slackToken
 
 	fmt.Print("Writing config.toml...")
 	f, err := os.Create("config.toml")

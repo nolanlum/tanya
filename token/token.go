@@ -19,17 +19,14 @@ type findTeamResponseFull struct {
 	slack.SlackResponse
 }
 
-// LoginResponse is the Slack API response from the auth.login endpoint.
-type LoginResponse struct {
-	Token  string `json:"token"`
-	UserID string `json:"user"`
-	TeamID string `json:"team"`
+type loginResponseFull struct {
+	Token string `json:"token"`
 	slack.SlackResponse
 }
 
-// DoSlackLogin interactively prompts the user and obtains a slack token
+// GetSlackToken interactively prompts the user and obtains a slack token
 // by authenticating against the Slack API.
-func DoSlackLogin() (*LoginResponse, error) {
+func GetSlackToken() (string, error) {
 	var domain, email string
 
 	fmt.Print("Team domain (*.slack.com): ")
@@ -37,22 +34,22 @@ func DoSlackLogin() (*LoginResponse, error) {
 
 	resp, err := http.PostForm("https://slack.com/api/auth.findTeam", url.Values{"domain": {domain}})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	var findTeamResponse findTeamResponseFull
 	err = json.Unmarshal(body, &findTeamResponse)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if findTeamResponse.SSO {
-		return nil, errors.New("SSO teams not yet supported")
+		return "", errors.New("SSO teams not yet supported")
 	}
 
 	fmt.Print("Slack email: ")
@@ -67,24 +64,24 @@ func DoSlackLogin() (*LoginResponse, error) {
 	resp, err = http.PostForm("https://slack.com/api/auth.signin",
 		url.Values{"team": {findTeamResponse.TeamID}, "email": {email}, "password": {password}})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	var loginResponse LoginResponse
+	var loginResponse loginResponseFull
 	err = json.Unmarshal(body, &loginResponse)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if !loginResponse.Ok {
-		return nil, errors.New(loginResponse.Error)
+		return "", errors.New(loginResponse.Error)
 	}
 
-	return &loginResponse, nil
+	return loginResponse.Token, nil
 }

@@ -62,7 +62,6 @@ Loop:
 				sendChan <- n.ToMessage()
 			}
 		}
-
 	}
 }
 
