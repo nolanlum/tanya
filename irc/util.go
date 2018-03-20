@@ -52,14 +52,15 @@ func (n *Nick) ToMessage() *Message {
 
 // Pong is a PONG message
 type Pong struct {
-	Token string
+	ServerName string
+	Token      string
 }
 
 // ToMessage turns a Pong into a Message
 func (p *Pong) ToMessage() *Message {
 	return &Message{
-		"tanya",
+		p.ServerName,
 		PongCmd,
-		[]string{"tanya", p.Token},
+		[]string{p.ServerName, p.Token},
 	}
 }

@@ -11,14 +11,18 @@ import (
 )
 
 type slack struct {
-	Token  string
-	UserID string
+	Token string
 }
 
 // Config holds configuration data for Tanya
 type Config struct {
 	Slack slack
 	IRC   irc.Config
+}
+
+// SetDefaults overwrites config entries with their default values
+func (c *Config) SetDefaults() {
+	c.IRC.SetDefaults()
 }
 
 // LoadConfig parses a config if it exists, or generates a new one
@@ -38,15 +42,13 @@ func LoadConfig() (*Config, error) {
 // initializeConfig interactively generates and writes a config
 func initializeConfig() (*Config, error) {
 	var conf Config
+	conf.SetDefaults()
 	loginResponse, err := token.DoSlackLogin()
 	if err != nil {
 		return nil, err
 	}
 
 	conf.Slack.Token = loginResponse.Token
-	conf.Slack.UserID = loginResponse.UserID
-
-	conf.IRC.ListenAddr = ":6667"
 
 	fmt.Print("Writing config.toml...")
 	f, err := os.Create("config.toml")
@@ -64,6 +66,7 @@ func initializeConfig() (*Config, error) {
 // parseConfig reads a toml string and returns a parsed config
 func parseConfig(tomlData string) (*Config, error) {
 	var conf Config
+	conf.SetDefaults()
 	if _, err := toml.Decode(tomlData, &conf); err != nil {
 		return nil, err
 	}

@@ -84,7 +84,7 @@ func (sc *SlackClient) bootstrapMappings() {
 		var err error
 		channels, gcp.Cursor, err = sc.client.GetConversations(gcp)
 		if err != nil {
-			log.Println(err)
+			log.Fatalln(err)
 		}
 
 		for _, channel := range channels {
@@ -96,7 +96,7 @@ func (sc *SlackClient) bootstrapMappings() {
 
 	users, err := sc.client.GetUsers()
 	if err != nil {
-		log.Println(err)
+		log.Fatalln(err)
 	}
 	for _, user := range users {
 		sc.userInfo[user.ID] = slackUserFromDto(&user)
@@ -146,15 +146,11 @@ type ClientChans struct {
 	StopChan     <-chan interface{}
 }
 
-// Initialize bootstraps the SlackClient with a client token and loads data
-func (sc *SlackClient) Initialize(token, userID string) (*SlackUser, error) {
+// Initialize bootstraps the SlackClient with a client token
+func (sc *SlackClient) Initialize(token string) {
 	sc.client = slack.New(token)
 	sc.rtm = sc.client.NewRTM()
 	sc.bootstrapMappings()
-
-	var err error
-	sc.self, err = sc.ResolveUser(userID)
-	return sc.self, err
 }
 
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
@@ -162,6 +158,15 @@ func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
 		EventType: MessageEvent,
 		Data:      &MessageEventData{*from, target, message},
 	}
+}
+
+func (sc *SlackClient) newInternalMessageEvent(message string) *SlackEvent {
+	to := tanyaInternalUser.Nick
+	if sc.self != nil {
+		to = sc.self.Nick
+	}
+
+	return newSlackMessageEvent(tanyaInternalUser, to, message)
 }
 
 // Poop is a goroutine entry point that handles the communication with Slack
@@ -177,13 +182,21 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 		default:
 			event := <-sc.rtm.IncomingEvents
 			switch event.Type {
-			case "message":
-				messageData, ok := event.Data.(*slack.MessageEvent)
-				if !ok {
-					chans.IncomingChan <- newSlackMessageEvent(
-						tanyaInternalUser, "*tanya", fmt.Sprintf("Non message-event: %+v", event.Data))
-					break
+			case "connected":
+				connectedData := event.Data.(*slack.ConnectedEvent)
+				sc.self = sc.userInfo[connectedData.Info.User.ID]
+
+				log.Printf("tanya connected to slack as %v\n", sc.self)
+
+				chans.IncomingChan <- &SlackEvent{
+					EventType: SlackConnectedEvent,
+					Data: &SlackConnectedEventData{
+						UserInfo: sc.self,
+					},
 				}
+
+			case "message":
+				messageData := event.Data.(*slack.MessageEvent)
 
 				switch messageData.SubType {
 				case "":
@@ -215,17 +228,11 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 
 				default:
-					chans.IncomingChan <- newSlackMessageEvent(
-						tanyaInternalUser, sc.self.Nick, fmt.Sprintf("%v: %+v", event.Type, event.Data))
+					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
 				}
 
 			case "user_change":
-				userData, ok := event.Data.(*slack.UserChangeEvent)
-				if !ok {
-					chans.IncomingChan <- newSlackMessageEvent(
-						tanyaInternalUser, sc.self.Nick, fmt.Sprintf("Non userchange-event: %+v", event.Data))
-					break
-				}
+				userData := event.Data.(*slack.UserChangeEvent)
 
 				// Update user info based on the new DTO
 				oldUserInfo := sc.userInfo[userData.User.ID]
@@ -247,8 +254,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				// haha nobody cares about this
 
 			default:
-				chans.IncomingChan <- newSlackMessageEvent(
-					tanyaInternalUser, sc.self.Nick, fmt.Sprintf("%v: %+v", event.Type, event.Data))
+				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
 			}
 		}
 	}

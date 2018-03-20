@@ -5,7 +5,8 @@ type SlackEventType int
 
 // Constants corresponding to event types
 const (
-	MessageEvent SlackEventType = iota
+	SlackConnectedEvent SlackEventType = iota
+	MessageEvent
 	NickChangeEvent
 	JoinEvent
 	PartEvent
@@ -16,6 +17,12 @@ const (
 type SlackEvent struct {
 	EventType SlackEventType
 	Data      interface{}
+}
+
+// SlackConnectedEventData represents the initial burst of data received upon
+// establishment of a Slack RTM connection
+type SlackConnectedEventData struct {
+	UserInfo *SlackUser
 }
 
 // MessageEventData represents a textual message which should

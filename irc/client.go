@@ -105,8 +105,14 @@ func (cc *clientConnection) handleConnInput() {
 			}
 
 			cc.outgoingMessages <- (&Pong{
-				Token: pingToken,
+				ServerName: cc.config.ServerName,
+				Token:      pingToken,
 			}).ToMessage()
+
+		case JoinCmd, PartCmd:
+			// TODO make this do more than just echo
+			msg.Prefix = cc.clientUser.String()
+			cc.outgoingMessages <- msg
 		}
 	}
 }

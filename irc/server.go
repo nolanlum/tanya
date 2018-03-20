@@ -113,19 +113,24 @@ func (s *Server) HandleOutgoingMessageRouting(outgoingMessages <-chan *Message) 
 	}
 }
 
-// SetSelfInfo sets the IRC user info for the gateway user and informs clients
-func (s *Server) SetSelfInfo(user User) {
+// HandleConnectBurst handles the initial burst of data from a
+// freshly established Slack connection.
+//
+// Sets the IRC user info for the gateway user and informs clients.
+func (s *Server) HandleConnectBurst(selfUser User) {
 	oldSelfUser := s.selfUser
-	s.selfUser = user
+	s.selfUser = selfUser
 
-	nickChangeMessage := (&Nick{
-		From:    oldSelfUser,
-		NewNick: user.Nick,
-	}).ToMessage()
+	if oldSelfUser != selfUser {
+		nickChangeMessage := (&Nick{
+			From:    oldSelfUser,
+			NewNick: selfUser.Nick,
+		}).ToMessage()
 
-	s.RLock()
-	for _, v := range s.clientConnections {
-		v.outgoingMessages <- nickChangeMessage
+		s.RLock()
+		for _, v := range s.clientConnections {
+			v.outgoingMessages <- nickChangeMessage
+		}
+		s.RUnlock()
 	}
-	s.RUnlock()
 }

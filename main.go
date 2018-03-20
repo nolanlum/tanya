@@ -34,7 +34,12 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 	}
 }
 
-func writeMessageLoop(recvChan <-chan *gateway.SlackEvent, sendChan chan<- *irc.Message, stopChan <-chan interface{}) {
+func writeMessageLoop(
+	recvChan <-chan *gateway.SlackEvent,
+	sendChan chan<- *irc.Message,
+	stopChan <-chan interface{},
+	server *irc.Server,
+) {
 Loop:
 	for {
 		select {
@@ -42,6 +47,13 @@ Loop:
 			break Loop
 		case msg := <-recvChan:
 			switch msg.EventType {
+			case gateway.SlackConnectedEvent:
+				// This is a state-changing event. Not 100% sure the main goroutine
+				// should be handling it but it doesn't make sense to have a separate
+				// server goroutine just for reconnected events, nor does it make sense
+				// to multiplex it onto sendChan.
+				b := msg.Data.(*gateway.SlackConnectedEventData)
+				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo))
 			case gateway.MessageEvent:
 				p := slackToPrivmsg(msg.Data.(*gateway.MessageEventData))
 				sendChan <- p.ToMessage()
@@ -71,7 +83,7 @@ func main() {
 
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
-	slackUser, err := slackClient.Initialize(conf.Slack.Token, conf.Slack.UserID)
+	slackClient.Initialize(conf.Slack.Token)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,15 +91,13 @@ func main() {
 		IncomingChan: slackIncomingChan,
 		StopChan:     stopChan,
 	})
-	log.Printf("tanya logged into slack as %+v\n", slackUser)
 
 	ircOutgoingChan := make(chan *irc.Message)
 	ircServer := irc.NewServer(&conf.IRC, stopChan)
-	ircServer.SetSelfInfo(slackUserToIRCUser(slackUser))
 	go ircServer.Listen()
 	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
 
 	log.Println("tanya ready for connections")
-	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan)
+	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan, ircServer)
 	log.Println("tanya shutting down")
 }

@@ -12,7 +12,11 @@ type Command int
 const (
 	NickCmd Command = iota
 	UserCmd
+
 	PrivmsgCmd
+	JoinCmd
+	PartCmd
+
 	PingCmd
 	PongCmd
 
@@ -27,11 +31,15 @@ type Message struct {
 }
 
 var cmdToStrMap = map[Command]string{
-	NickCmd:    "NICK",
-	UserCmd:    "USER",
+	NickCmd: "NICK",
+	UserCmd: "USER",
+
 	PrivmsgCmd: "PRIVMSG",
-	PingCmd:    "PING",
-	PongCmd:    "PONG",
+	JoinCmd:    "JOIN",
+	PartCmd:    "PART",
+
+	PingCmd: "PING",
+	PongCmd: "PONG",
 
 	NumericReplyCmd: "",
 }
@@ -126,6 +134,16 @@ func StringToMessage(str string) (*Message, error) {
 			return nil, ErrNeedMoreParams("", "PRIVMSG")
 		}
 		return &Message{prefix, PrivmsgCmd, params}, nil
+	case "JOIN":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("", "JOIN")
+		}
+		return &Message{prefix, JoinCmd, params}, nil
+	case "PART":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("", "PART")
+		}
+		return &Message{prefix, PartCmd, params}, nil
 	case "PING":
 		return &Message{prefix, PingCmd, params}, nil
 	default:
