@@ -23,8 +23,6 @@ type clientConnection struct {
 	clientUser User
 	serverUser *User
 
-	givenNick, givenUser bool
-
 	state clientState
 
 	outgoingMessages chan *Message
