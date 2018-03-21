@@ -11,6 +11,8 @@ type clientState int
 
 const (
 	clientStateRegistering clientState = iota
+	clientStateAwaitingNick
+	clientStateAwaitingUser
 	clientStateRegistered
 )
 
@@ -88,14 +90,13 @@ func (cc *clientConnection) handleConnInput() {
 		switch msg.Cmd {
 		case NickCmd:
 			if cc.state == clientStateRegistering {
-				cc.givenNick = true
 				cc.clientUser.Nick = msg.Params[0]
-
+				cc.state = clientStateAwaitingUser
+			} else if cc.state == clientStateAwaitingNick {
 				// Finish registration if we already have the USER
-				if cc.givenUser {
-					cc.state = clientStateRegistered
-					cc.finishRegistration()
-				}
+				cc.clientUser.Nick = msg.Params[0]
+				cc.state = clientStateRegistered
+				cc.finishRegistration()
 			} else {
 				cc.outgoingMessages <- (&Nick{
 					From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
@@ -105,13 +106,11 @@ func (cc *clientConnection) handleConnInput() {
 
 		case UserCmd:
 			if cc.state == clientStateRegistering {
-				cc.givenUser = true
-
+				cc.state = clientStateAwaitingNick
+			} else if cc.state == clientStateAwaitingUser {
 				// Finish registration if we already have the NICK
-				if cc.givenNick {
-					cc.state = clientStateRegistered
-					cc.finishRegistration()
-				}
+				cc.state = clientStateRegistered
+				cc.finishRegistration()
 			}
 
 		case PingCmd:
