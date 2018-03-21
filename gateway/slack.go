@@ -214,11 +214,6 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					if messageData.Text != "" {
 						chans.IncomingChan <- newSlackMessageEvent(
 							user, channel.Name, sc.ParseMessageText(messageData.Text))
-
-						if messageData.Text == "hallo!" {
-							sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage("hullo!", messageData.Channel))
-						}
-
 					} else {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
@@ -226,6 +221,43 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 								user, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
 						}
 					}
+
+				case "message_changed":
+					if messageData.SubMessage == nil || messageData.SubMessage.SubType != "" {
+						chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%+v", messageData))
+						continue
+					}
+					subMessage := messageData.SubMessage
+
+					// For now, only handle the Slack native expansion of archive links
+					if !strings.Contains(subMessage.Text, "slack.com/archives") || len(subMessage.Attachments) < 1 {
+						continue
+					}
+
+					user, err := sc.ResolveUser(subMessage.User)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+					channel, err := sc.ResolveChannel(messageData.Channel)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorId)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+					chans.IncomingChan <- newSlackMessageEvent(
+						user,
+						channel.Name,
+						fmt.Sprintf(
+							"<%s> %s",
+							quotedUser.Nick,
+							sc.ParseMessageText(subMessage.Attachments[0].Text),
+						),
+					)
 
 				default:
 					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
