@@ -11,6 +11,8 @@ type clientState int
 
 const (
 	clientStateRegistering clientState = iota
+	clientStateAwaitingNick
+	clientStateAwaitingUser
 	clientStateRegistered
 )
 
@@ -46,6 +48,18 @@ func (cc *clientConnection) String() string {
 	return fmt.Sprintf("%v", cc.conn.RemoteAddr())
 }
 
+func (cc *clientConnection) finishRegistration() {
+	// Set the client straight if its nick is wrong
+	if cc.clientUser.Nick != cc.serverUser.Nick {
+		cc.outgoingMessages <- (&Nick{
+			From:    User{Nick: cc.clientUser.Nick, Ident: cc.serverUser.Ident},
+			NewNick: cc.serverUser.Nick,
+		}).ToMessage()
+	}
+	cc.clientUser = *cc.serverUser
+	cc.sendWelcome()
+}
+
 func (cc *clientConnection) handleConnInput() {
 	defer func() {
 		close(cc.shutdown)
@@ -75,6 +89,12 @@ func (cc *clientConnection) handleConnInput() {
 		case NickCmd:
 			if cc.state == clientStateRegistering {
 				cc.clientUser.Nick = msg.Params[0]
+				cc.state = clientStateAwaitingUser
+			} else if cc.state == clientStateAwaitingNick {
+				// Finish registration if we already have the USER
+				cc.clientUser.Nick = msg.Params[0]
+				cc.state = clientStateRegistered
+				cc.finishRegistration()
 			} else {
 				cc.outgoingMessages <- (&Nick{
 					From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
@@ -83,19 +103,13 @@ func (cc *clientConnection) handleConnInput() {
 			}
 
 		case UserCmd:
-			cc.state = clientStateRegistered
-
-			// Set the client straight if its nick is wrong
-			if cc.clientUser.Nick != cc.serverUser.Nick {
-				cc.outgoingMessages <- (&Nick{
-					From:    User{Nick: cc.clientUser.Nick, Ident: cc.serverUser.Ident},
-					NewNick: cc.serverUser.Nick,
-				}).ToMessage()
+			if cc.state == clientStateRegistering {
+				cc.state = clientStateAwaitingNick
+			} else if cc.state == clientStateAwaitingUser {
+				// Finish registration if we already have the NICK
+				cc.state = clientStateRegistered
+				cc.finishRegistration()
 			}
-			cc.clientUser = *cc.serverUser
-
-			// Send the welcome messages
-			cc.sendWelcome()
 
 		case PingCmd:
 			var pingToken string
@@ -123,7 +137,9 @@ func (cc *clientConnection) handleConnOutput() {
 			return
 
 		case message := <-cc.outgoingMessages:
-			fmt.Fprintln(cc.conn, message.String())
+			if cc.state == clientStateRegistered {
+				fmt.Fprintln(cc.conn, message.String())
+			}
 		}
 	}
 }
