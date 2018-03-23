@@ -25,12 +25,22 @@ type clientConnection struct {
 
 	state clientState
 
+	initialJoinsAndParts []*Message
+
 	outgoingMessages chan *Message
 	shutdown         chan interface{}
 }
 
-func newClientConnection(conn *net.TCPConn, user *User, config *Config) *clientConnection {
+func newClientConnection(conn *net.TCPConn, user *User, config *Config, channels []string) *clientConnection {
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+
+	initJsAndPs := make([]*Message, len(channels))
+	for i, channel := range(channels) {
+		initJsAndPs[i] = (&Join{
+			ServerName: user.Nick,
+			ChannelName: channel,
+		}).ToMessage()
+	}
 
 	return &clientConnection{
 		conn:   conn,
@@ -38,6 +48,8 @@ func newClientConnection(conn *net.TCPConn, user *User, config *Config) *clientC
 
 		clientUser: User{Nick: "*", Ident: user.Ident, Host: ip},
 		serverUser: user,
+
+		initialJoinsAndParts: initJsAndPs,
 
 		outgoingMessages: make(chan *Message),
 		shutdown:         make(chan interface{}),
@@ -124,8 +136,12 @@ func (cc *clientConnection) handleConnInput() {
 
 		case JoinCmd, PartCmd:
 			// TODO make this do more than just echo
-			msg.Prefix = cc.clientUser.String()
-			cc.outgoingMessages <- msg
+			if cc.state == clientStateRegistered {
+				msg.Prefix = cc.clientUser.String()
+				cc.outgoingMessages <- msg
+			} else {
+				cc.initialJoinsAndParts = append(cc.initialJoinsAndParts, msg)
+			}
 		}
 	}
 }
@@ -161,6 +177,8 @@ func (cc *clientConnection) sendWelcome() {
 			Params: []string{"Your host is tanya, running SalarymanOS 9.0"},
 		}),
 	}
+
+	messages = append(messages, cc.initialJoinsAndParts...)
 
 	for _, m := range messages {
 		cc.outgoingMessages <- m

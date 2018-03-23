@@ -23,6 +23,7 @@ type SlackEvent struct {
 // establishment of a Slack RTM connection
 type SlackConnectedEventData struct {
 	UserInfo *SlackUser
+	Channels []*SlackChannel
 }
 
 // MessageEventData represents a textual message which should

@@ -64,3 +64,18 @@ func (p *Pong) ToMessage() *Message {
 		[]string{p.ServerName, p.Token},
 	}
 }
+
+// Join is a JOIN message
+type Join struct {
+	ServerName string
+	ChannelName string
+}
+
+// ToMessage turns a Join into a Message
+func (j *Join) ToMessage() *Message {
+	return &Message{
+		j.ServerName,
+		JoinCmd,
+		[]string{"#" + j.ChannelName},
+	}
+}
