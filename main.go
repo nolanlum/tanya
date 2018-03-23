@@ -53,7 +53,11 @@ Loop:
 				// server goroutine just for reconnected events, nor does it make sense
 				// to multiplex it onto sendChan.
 				b := msg.Data.(*gateway.SlackConnectedEventData)
-				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo))
+				channelNames := make([]string, len(b.Channels))
+				for i, channel := range b.Channels {
+					channelNames[i] = channel.Name
+				}
+				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo), channelNames)
 			case gateway.MessageEvent:
 				p := slackToPrivmsg(msg.Data.(*gateway.MessageEventData))
 				sendChan <- p.ToMessage()

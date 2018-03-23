@@ -12,6 +12,7 @@ import (
 type Server struct {
 	clientConnections map[net.Addr]*clientConnection
 	stopChan          <-chan interface{}
+	initialChannels   []string
 
 	selfUser User
 	config   *Config
@@ -58,7 +59,7 @@ func (s *Server) Listen() {
 			}
 		}
 
-		cc := newClientConnection(conn, &s.selfUser, s.config)
+		cc := newClientConnection(conn, &s.selfUser, s.config, s.initialChannels)
 		log.Printf("IRC client connected: %v", cc)
 
 		s.Lock()
@@ -116,8 +117,8 @@ func (s *Server) HandleOutgoingMessageRouting(outgoingMessages <-chan *Message) 
 // HandleConnectBurst handles the initial burst of data from a
 // freshly established Slack connection.
 //
-// Sets the IRC user info for the gateway user and informs clients.
-func (s *Server) HandleConnectBurst(selfUser User) {
+// Sets the IRC user info for the gateway user, informs clients, and joins channels.
+func (s *Server) HandleConnectBurst(selfUser User, channelNames []string) {
 	oldSelfUser := s.selfUser
 	s.selfUser = selfUser
 
@@ -133,4 +134,7 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 		}
 		s.RUnlock()
 	}
+
+	s.initialChannels = make([]string, len(channelNames))
+	copy(s.initialChannels, channelNames)
 }

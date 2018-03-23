@@ -185,6 +185,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
 				sc.self = sc.userInfo[connectedData.Info.User.ID]
+				slackChannels := make([]*SlackChannel, 0)
+				for _, channel := range sc.channelInfo {
+					slackChannels = append(slackChannels, channel)
+				}
 
 				log.Printf("tanya connected to slack as %v\n", sc.self)
 
@@ -192,6 +196,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					EventType: SlackConnectedEvent,
 					Data: &SlackConnectedEventData{
 						UserInfo: sc.self,
+						Channels: slackChannels,
 					},
 				}
 
