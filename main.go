@@ -16,7 +16,12 @@ func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 }
 
 func slackUserToIRCUser(s *gateway.SlackUser) irc.User {
-	return irc.User{Nick: s.Nick, Ident: s.SlackID}
+	return irc.User{
+		Nick:     s.Nick,
+		Ident:    s.SlackID,
+		Host:     "localhost",
+		RealName: s.RealName,
+	}
 }
 
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
@@ -32,6 +37,32 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 		From:    slackUserToIRCUser(&n.From),
 		NewNick: n.NewNick,
 	}
+}
+
+// this name specially chosen to trigger ATRAN
+type corpusCallosum struct {
+	sc *gateway.SlackClient
+}
+
+// GetChannelUsers implements irc.ServerStateProvider.GetChannelUsers
+func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
+	channel := c.sc.ResolveNameToChannel(channelName)
+	if channel == nil {
+		log.Printf("error while querying user list for %v: channel_not_found", channelName)
+		return nil
+	}
+
+	channelUsers, err := c.sc.GetChannelUsers(channel.SlackID)
+	if err != nil {
+		log.Printf("error while querying user list for %v: %v", channelName, err)
+		return nil
+	}
+
+	var users []irc.User
+	for _, user := range channelUsers {
+		users = append(users, slackUserToIRCUser(&user))
+	}
+	return users
 }
 
 func writeMessageLoop(
@@ -92,7 +123,8 @@ func main() {
 	})
 
 	ircOutgoingChan := make(chan *irc.Message)
-	ircServer := irc.NewServer(&conf.IRC, stopChan)
+	ircStateProvider := &corpusCallosum{slackClient}
+	ircServer := irc.NewServer(&conf.IRC, stopChan, ircStateProvider)
 	go ircServer.Listen()
 	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
 

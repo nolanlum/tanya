@@ -137,6 +137,48 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 	return
 }
 
+// ResolveNameToChannel takes a channel name and fetches a SlackChannel with that name
+// If two channels have the same name, then whelp the first one we find wins
+func (sc *SlackClient) ResolveNameToChannel(channelName string) *SlackChannel {
+	for _, channelInfo := range sc.channelInfo {
+		if channelInfo.Name == channelName {
+			return channelInfo
+		}
+	}
+
+	return nil
+}
+
+// GetChannelUsers queries the Slack API for a list of users in the given channel, returning
+// SlackUser objects for each one
+func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err error) {
+	hasMore := true
+	guicp := &slack.GetUsersInConversationParameters{
+		ChannelID: channelID,
+		Limit:     1000,
+	}
+	for hasMore {
+		var userIDs []string
+		userIDs, guicp.Cursor, err = sc.client.GetUsersInConversation(guicp)
+		if err != nil {
+			return
+		}
+
+		for _, userID := range userIDs {
+			var user *SlackUser
+			user, err = sc.ResolveUser(userID)
+			if err != nil {
+				return
+			}
+			users = append(users, *user)
+		}
+
+		hasMore = guicp.Cursor != ""
+	}
+
+	return
+}
+
 // ClientChans contains a sending channel, receiving channel, and stop channel
 // that the Slack goroutine receives outgoing commands from, sends incoming messages to,
 // and can stop according to
@@ -282,7 +324,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 				}
 
-			case "channel_marked", "latency_report", "user_typing", "pref_change":
+			case "channel_marked", "group_marked", "latency_report", "user_typing", "pref_change":
 				// haha nobody cares about this
 
 			default:

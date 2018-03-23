@@ -15,10 +15,18 @@ const (
 	RPL_WELCOME  NumericCommand = 001
 	RPL_YOURHOST NumericCommand = 002
 	RPL_CREATED  NumericCommand = 003
+	RPL_ISUPPORT NumericCommand = 005
 
-	RPL_MOTD      NumericCommand = 372
-	RPL_MOTDSTART NumericCommand = 375
-	RPL_ENDOFMOTD NumericCommand = 376
+	RPL_TOPIC         NumericCommand = 332
+	RPL_TOPIC_WHOTIME NumericCommand = 333
+
+	RPL_WHOREPLY   NumericCommand = 352
+	RPL_ENDOFWHO   NumericCommand = 315
+	RPL_NAMREPLY   NumericCommand = 353
+	RPL_ENDOFNAMES NumericCommand = 366
+	RPL_MOTD       NumericCommand = 372
+	RPL_MOTDSTART  NumericCommand = 375
+	RPL_ENDOFMOTD  NumericCommand = 376
 
 	ERR_UNKNOWNCOMMAND NumericCommand = 421
 	ERR_NEEDMOREPARAMS NumericCommand = 461
@@ -53,7 +61,7 @@ func (n *NumericReply) Error() string {
 	return fmt.Sprintf("%03d: \"%v\"", n.Code, strings.Join(n.Params, "\",\""))
 }
 
-// MOTDAsNumerics formats a MOTD into a series of numeric replies.
+// MOTDAsNumerics formats a MOTD into a series of numeric replies
 func MOTDAsNumerics(motd string) []*NumericReply {
 	var replies []*NumericReply
 
@@ -73,6 +81,72 @@ func MOTDAsNumerics(motd string) []*NumericReply {
 	replies = append(replies, &NumericReply{
 		Code:   RPL_ENDOFMOTD,
 		Params: []string{"End of /MOTD command."},
+	})
+	return replies
+}
+
+// WholistAsNumerics formats a list of Users into a series of WHO replies
+func WholistAsNumerics(users []User, channelName, serverName string) []*NumericReply {
+	var replies []*NumericReply
+
+	for _, user := range users {
+		awayChar := "H"
+		if user.Away {
+			awayChar = "G"
+		}
+
+		replies = append(replies, &NumericReply{
+			Code: RPL_WHOREPLY,
+			Params: []string{
+				channelName,
+				user.Ident,
+				user.Host,
+				serverName,
+				user.Nick,
+				awayChar,
+				fmt.Sprintf("0 %s", user.RealName),
+			},
+		})
+	}
+
+	replies = append(replies, &NumericReply{
+		Code:   RPL_ENDOFWHO,
+		Params: []string{channelName, "End of /WHO list"},
+	})
+	return replies
+}
+
+// NamelistAsNumerics formats a list of Users into a series of NAMES replies
+func NamelistAsNumerics(users []User, channelName string) []*NumericReply {
+	var replies []*NumericReply
+	var namesListBuilder strings.Builder
+
+	for _, user := range users {
+		if namesListBuilder.Len() > 400 {
+			// So the ENTIRE IRC message can't be more than 512 bytes, but we're going to
+			// conservatively assume that the part that isn't the NAMES list isn't more than
+			// 112 bytes, which seems...safe enough.
+			replies = append(replies, &NumericReply{
+				Code:   RPL_NAMREPLY,
+				Params: []string{"=", channelName, strings.TrimSpace(namesListBuilder.String())},
+			})
+			namesListBuilder.Reset()
+		}
+
+		namesListBuilder.WriteString(user.Nick)
+		namesListBuilder.WriteString(" ")
+	}
+
+	if namesListBuilder.Len() > 0 {
+		replies = append(replies, &NumericReply{
+			Code:   RPL_NAMREPLY,
+			Params: []string{"=", channelName, strings.TrimSpace(namesListBuilder.String())},
+		})
+	}
+
+	replies = append(replies, &NumericReply{
+		Code:   RPL_ENDOFNAMES,
+		Params: []string{channelName, "End of /NAMES list"},
 	})
 	return replies
 }

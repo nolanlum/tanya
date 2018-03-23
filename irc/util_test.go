@@ -8,7 +8,7 @@ import (
 func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
 	p := &Privmsg{
-		From:    User{"poop", "poopser", ""},
+		From:    User{"poop", "poopser", "", "poop", false},
 		Channel: "#chatter-technical",
 		Message: msgStr,
 	}
@@ -69,7 +69,7 @@ func TestNick_ToMessage(t *testing.T) {
 		},
 		{
 			"with prefix",
-			fields{User{"asid", "acid", ""}, "czi"},
+			fields{User{"asid", "acid", "", "Asid Asid", false}, "czi"},
 			&Message{
 				"asid!acid@localhost",
 				NickCmd,

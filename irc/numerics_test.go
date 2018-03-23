@@ -96,6 +96,86 @@ func TestNumericReply_Error(t *testing.T) {
 	}
 }
 
+func TestWholistAsNumerics(t *testing.T) {
+	users := []User{
+		{
+			Nick:     "SZI",
+			Ident:    "~szi",
+			Host:     "Sasuga.Za.Indojin",
+			RealName: "haha im szi",
+			Away:     false,
+		},
+	}
+	channelName := "#indojins"
+	serverName := "irc.indoj.in"
+	target := "SZI"
+
+	var got []string
+	for _, numeric := range WholistAsNumerics(users, channelName, serverName) {
+		numeric.ServerName = serverName
+		numeric.Target = target
+		got = append(got, numeric.ToMessage().String())
+	}
+
+	want := []string{
+		":irc.indoj.in 352 SZI #indojins ~szi Sasuga.Za.Indojin irc.indoj.in SZI H :0 haha im szi",
+		":irc.indoj.in 315 SZI #indojins :End of /WHO list",
+	}
+
+	if len(want) != len(got) {
+		t.Errorf("len(WholistAsNumerics()) != len(want), %v != %v", len(got), len(want))
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("WholistAsNumerics()[%v] = \n\"%v\"\n want \n\"%v\"", i, got[i], want[i])
+		}
+
+	}
+}
+
+func TestNamelistAsNumerics(t *testing.T) {
+	users := []User{
+		{
+			Nick:     "SZI",
+			Ident:    "~szi",
+			Host:     "Sasuga.Za.Indojin",
+			RealName: "haha im szi",
+		},
+		{
+			Nick:     "acid`",
+			Ident:    "~asid",
+			Host:     "grass",
+			RealName: "haha im asid xD",
+		},
+	}
+	channelName := "#indojins"
+	target := "SZI"
+
+	var got []string
+	for _, numeric := range NamelistAsNumerics(users, channelName) {
+		numeric.ServerName = "irc.indoj.in"
+		numeric.Target = target
+		got = append(got, numeric.ToMessage().String())
+	}
+
+	want := []string{
+		":irc.indoj.in 353 SZI = #indojins :SZI acid`",
+		":irc.indoj.in 366 SZI #indojins :End of /NAMES list",
+	}
+
+	if len(want) != len(got) {
+		t.Errorf("len(NamelistAsNumerics()) != len(want), %v != %v", len(got), len(want))
+	}
+
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("NamelistAsNumerics()[%v] = \n\"%v\"\n want \n\"%v\"", i, got[i], want[i])
+		}
+
+	}
+}
+
 func TestErrUnknownCommand(t *testing.T) {
 	want := &NumericReply{
 		Code:   ERR_UNKNOWNCOMMAND,

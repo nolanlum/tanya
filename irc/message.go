@@ -16,6 +16,8 @@ const (
 	PrivmsgCmd
 	JoinCmd
 	PartCmd
+	ModeCmd
+	WhoCmd
 
 	PingCmd
 	PongCmd
@@ -37,6 +39,8 @@ var cmdToStrMap = map[Command]string{
 	PrivmsgCmd: "PRIVMSG",
 	JoinCmd:    "JOIN",
 	PartCmd:    "PART",
+	ModeCmd:    "MODE",
+	WhoCmd:     "WHO",
 
 	PingCmd: "PING",
 	PongCmd: "PONG",
@@ -144,6 +148,10 @@ func StringToMessage(str string) (*Message, error) {
 			return nil, ErrNeedMoreParams("PART")
 		}
 		return &Message{prefix, PartCmd, params}, nil
+	case "MODE":
+		return &Message{prefix, ModeCmd, params}, nil
+	case "WHO":
+		return &Message{prefix, WhoCmd, params}, nil
 	case "PING":
 		return &Message{prefix, PingCmd, params}, nil
 	default:

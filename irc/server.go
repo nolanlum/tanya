@@ -13,19 +13,21 @@ type Server struct {
 	clientConnections map[net.Addr]*clientConnection
 	stopChan          <-chan interface{}
 
-	selfUser User
-	config   *Config
+	selfUser      User
+	config        *Config
+	stateProvider ServerStateProvider
 
 	sync.RWMutex
 }
 
 // NewServer creates a new IRC server
-func NewServer(config *Config, stopChan <-chan interface{}) *Server {
+func NewServer(config *Config, stopChan <-chan interface{}, stateProvider ServerStateProvider) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
 		stopChan:          stopChan,
 
-		config: config,
+		config:        config,
+		stateProvider: stateProvider,
 	}
 }
 
@@ -58,7 +60,7 @@ func (s *Server) Listen() {
 			}
 		}
 
-		cc := newClientConnection(conn, &s.selfUser, s.config)
+		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider)
 		log.Printf("IRC client connected: %v", cc)
 
 		s.Lock()
@@ -133,4 +135,10 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 		}
 		s.RUnlock()
 	}
+}
+
+// ServerStateProvider contains methods used by the IRC server to answer
+// client queries about channels and their members.
+type ServerStateProvider interface {
+	GetChannelUsers(channelName string) []User
 }

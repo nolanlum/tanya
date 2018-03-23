@@ -4,9 +4,12 @@ import "fmt"
 
 // User represents a user identified by a nick and an ident
 type User struct {
-	Nick  string
-	Ident string
-	Host  string
+	Nick     string
+	Ident    string
+	Host     string
+	RealName string
+
+	Away bool
 }
 
 func (u User) String() string {
@@ -62,5 +65,20 @@ func (p *Pong) ToMessage() *Message {
 		p.ServerName,
 		PongCmd,
 		[]string{p.ServerName, p.Token},
+	}
+}
+
+// Join is a JOIN message
+type Join struct {
+	User    User
+	Channel string
+}
+
+// ToMessage turns a Join into a Message
+func (j *Join) ToMessage() *Message {
+	return &Message{
+		j.User.String(),
+		JoinCmd,
+		[]string{j.Channel},
 	}
 }
