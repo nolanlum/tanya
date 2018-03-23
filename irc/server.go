@@ -135,7 +135,6 @@ func (s *Server) HandleConnectBurst(selfUser User, channelNames []string) {
 		s.RUnlock()
 	}
 
-	log.Println("hello 1")
 	s.initialChannels = make([]string, len(channelNames))
 	copy(s.initialChannels, channelNames)
 }
