@@ -186,7 +186,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				connectedData := event.Data.(*slack.ConnectedEvent)
 				sc.self = sc.userInfo[connectedData.Info.User.ID]
 				slackChannels := make([]*SlackChannel, 0)
-				for _, channel := range(sc.channelInfo) {
+				for _, channel := range sc.channelInfo {
 					slackChannels = append(slackChannels, channel)
 				}
 

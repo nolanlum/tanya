@@ -54,7 +54,7 @@ Loop:
 				// to multiplex it onto sendChan.
 				b := msg.Data.(*gateway.SlackConnectedEventData)
 				channelNames := make([]string, len(b.Channels))
-				for i, channel := range(b.Channels) {
+				for i, channel := range b.Channels {
 					channelNames[i] = channel.Name
 				}
 				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo), channelNames)

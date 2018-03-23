@@ -35,9 +35,9 @@ func newClientConnection(conn *net.TCPConn, user *User, config *Config, channels
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
 	initJsAndPs := make([]*Message, len(channels))
-	for i, channel := range(channels) {
+	for i, channel := range channels {
 		initJsAndPs[i] = (&Join{
-			ServerName: user.Nick,
+			ServerName:  user.Nick,
 			ChannelName: channel,
 		}).ToMessage()
 	}

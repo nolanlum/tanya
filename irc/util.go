@@ -67,7 +67,7 @@ func (p *Pong) ToMessage() *Message {
 
 // Join is a JOIN message
 type Join struct {
-	ServerName string
+	ServerName  string
 	ChannelName string
 }
 
