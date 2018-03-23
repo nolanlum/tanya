@@ -53,8 +53,9 @@ type SlackClient struct {
 	rtm    *slack.RTM
 	self   *SlackUser
 
-	channelInfo map[string]*SlackChannel
-	userInfo    map[string]*SlackUser
+	channelInfo        map[string]*SlackChannel
+	userInfo           map[string]*SlackUser
+	channelMemberships map[string]*SlackChannel
 
 	slackURLEncoder *strings.Replacer
 	slackURLDecoder *strings.Replacer
@@ -63,8 +64,9 @@ type SlackClient struct {
 // NewSlackClient creates a new SlackClient with some default values
 func NewSlackClient() *SlackClient {
 	return &SlackClient{
-		channelInfo: make(map[string]*SlackChannel),
-		userInfo:    make(map[string]*SlackUser),
+		channelInfo:        make(map[string]*SlackChannel),
+		userInfo:           make(map[string]*SlackUser),
+		channelMemberships: make(map[string]*SlackChannel),
 
 		slackURLEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
 		slackURLDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
@@ -88,7 +90,12 @@ func (sc *SlackClient) bootstrapMappings() {
 		}
 
 		for _, channel := range channels {
-			sc.channelInfo[channel.ID] = slackChannelFromDto(&channel)
+			slackChannel := slackChannelFromDto(&channel)
+
+			sc.channelInfo[channel.ID] = slackChannel
+			if channel.IsMember {
+				sc.channelMemberships[channel.ID] = slackChannel
+			}
 		}
 
 		hasMore = gcp.Cursor != ""
@@ -179,6 +186,14 @@ func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err
 	return
 }
 
+// GetChannelMemberships returns the channels this SlackClient is a member of
+func (sc *SlackClient) GetChannelMemberships() (channels []SlackChannel) {
+	for _, channel := range sc.channelMemberships {
+		channels = append(channels, *channel)
+	}
+	return
+}
+
 // ClientChans contains a sending channel, receiving channel, and stop channel
 // that the Slack goroutine receives outgoing commands from, sends incoming messages to,
 // and can stop according to
@@ -192,7 +207,6 @@ type ClientChans struct {
 func (sc *SlackClient) Initialize(token string) {
 	sc.client = slack.New(token)
 	sc.rtm = sc.client.NewRTM()
-	sc.bootstrapMappings()
 }
 
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
@@ -226,6 +240,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			switch event.Type {
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
+				sc.bootstrapMappings()
 				sc.self = sc.userInfo[connectedData.Info.User.ID]
 
 				log.Printf("tanya connected to slack as %v\n", sc.self)

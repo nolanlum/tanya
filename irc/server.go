@@ -141,4 +141,6 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 // client queries about channels and their members.
 type ServerStateProvider interface {
 	GetChannelUsers(channelName string) []User
+
+	GetJoinedChannels() []string
 }

@@ -65,6 +65,15 @@ func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
 	return users
 }
 
+// GetJoinedChannels implements irc.ServerStateProvider.GetJoinedChannels
+func (c *corpusCallosum) GetJoinedChannels() []string {
+	var channelNames []string
+	for _, channel := range c.sc.GetChannelMemberships() {
+		channelNames = append(channelNames, channel.Name)
+	}
+	return channelNames
+}
+
 func writeMessageLoop(
 	recvChan <-chan *gateway.SlackEvent,
 	sendChan chan<- *irc.Message,

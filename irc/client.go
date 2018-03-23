@@ -135,25 +135,7 @@ func (cc *clientConnection) handleConnInput() {
 
 			for _, channelName := range channels {
 				// TODO make this actually join if we're not already a part of the channel
-				cc.outgoingMessages <- (&Join{
-					User:    cc.clientUser,
-					Channel: channelName,
-				}).ToMessage()
-
-				// TODO actually look up the topic info here
-				cc.outgoingMessages <- cc.reply(NumericReply{
-					Code:   RPL_TOPIC,
-					Params: []string{channelName, "haha this is a topic"},
-				})
-				cc.outgoingMessages <- cc.reply(NumericReply{
-					Code:   RPL_TOPIC_WHOTIME,
-					Params: []string{channelName, "tanya", "0"},
-				})
-
-				users := cc.stateProvider.GetChannelUsers(channelName)
-				for _, m := range NamelistAsNumerics(users, channelName) {
-					cc.outgoingMessages <- cc.reply(*m)
-				}
+				cc.handleChannelJoined(channelName)
 			}
 
 		case PartCmd:
@@ -242,6 +224,33 @@ func (cc *clientConnection) sendWelcome() {
 		cc.outgoingMessages <- m
 	}
 	for _, m := range MOTDAsNumerics(cc.config.MOTD) {
+		cc.outgoingMessages <- cc.reply(*m)
+	}
+
+	for _, channelName := range cc.stateProvider.GetJoinedChannels() {
+		cc.handleChannelJoined(channelName)
+	}
+}
+
+func (cc *clientConnection) handleChannelJoined(channelName string) {
+	joinResponse := (&Join{
+		User:    cc.clientUser,
+		Channel: channelName,
+	}).ToMessage()
+	cc.outgoingMessages <- joinResponse
+
+	// TODO actually look up the topic info here
+	cc.outgoingMessages <- cc.reply(NumericReply{
+		Code:   RPL_TOPIC,
+		Params: []string{channelName, "haha this is a topic"},
+	})
+	cc.outgoingMessages <- cc.reply(NumericReply{
+		Code:   RPL_TOPIC_WHOTIME,
+		Params: []string{channelName, "tanya", "0"},
+	})
+
+	users := cc.stateProvider.GetChannelUsers(channelName)
+	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
 	}
 }
