@@ -20,6 +20,13 @@ type Server struct {
 	sync.RWMutex
 }
 
+// ServerMessage is a message from a client to the server, indexed by the
+// remote address of the connection
+type ServerMessage struct {
+	message Messagable
+	cAddr   net.Addr
+}
+
 // NewServer creates a new IRC server
 func NewServer(config *Config, stopChan <-chan interface{}, stateProvider ServerStateProvider) *Server {
 	return &Server{
@@ -45,6 +52,8 @@ func (s *Server) Listen() {
 	defer l.Close()
 
 	log.Printf("IRC server now listening on %v", addr)
+	serverChan := make(chan *ServerMessage)
+	go s.handleIncomingMessageRouting(serverChan)
 
 	for {
 		go s.waitForKillListener(l)
@@ -60,7 +69,7 @@ func (s *Server) Listen() {
 			}
 		}
 
-		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider)
+		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider, serverChan)
 		log.Printf("IRC client connected: %v", cc)
 
 		s.Lock()
@@ -99,6 +108,35 @@ func (s *Server) waitForKillListener(l *net.TCPListener) {
 	// cause any deadlocks
 	for _, conn := range conns {
 		close(conn.shutdown)
+	}
+}
+
+func (s *Server) handleIncomingMessageRouting(incomingMessages <-chan *ServerMessage) {
+	for {
+		select {
+		case <-s.stopChan:
+			return
+		case msg := <-incomingMessages:
+			// Do not send the message back to the originator of the messages
+			handleIncomingMessage(msg.message, s.stateProvider)
+
+			s.RLock()
+			for addr, conn := range s.clientConnections {
+				log.Printf("addr: %v msg.cAddr: %v\n", addr, msg.cAddr)
+				if addr != msg.cAddr {
+					log.Printf("I am sending a message to the client\n")
+					conn.outgoingMessages <- msg.message.ToMessage()
+				}
+			}
+			s.RUnlock()
+		}
+	}
+}
+
+func handleIncomingMessage(msg Messagable, ssp ServerStateProvider) {
+	switch m := msg.(type) {
+	case *Privmsg:
+		ssp.SendPrivmsg(m)
 	}
 }
 
@@ -143,4 +181,5 @@ type ServerStateProvider interface {
 	GetChannelUsers(channelName string) []User
 
 	GetJoinedChannels() []string
+	SendPrivmsg(privMsg *Privmsg)
 }

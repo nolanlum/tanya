@@ -28,6 +28,7 @@ type clientConnection struct {
 	state clientState
 
 	outgoingMessages chan *Message
+	serverChan       chan<- *ServerMessage
 	shutdown         chan interface{}
 }
 
@@ -36,6 +37,7 @@ func newClientConnection(
 	user *User,
 	config *Config,
 	stateProvider ServerStateProvider,
+	serverChan chan *ServerMessage,
 ) *clientConnection {
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
@@ -48,6 +50,7 @@ func newClientConnection(
 		serverUser: user,
 
 		outgoingMessages: make(chan *Message),
+		serverChan:       serverChan,
 		shutdown:         make(chan interface{}),
 	}
 }
@@ -94,6 +97,16 @@ func (cc *clientConnection) handleConnInput() {
 		}
 
 		switch msg.Cmd {
+		case PrivmsgCmd:
+			// Swallow the PRIVMSG if we haven't registered yet
+			if cc.state != clientStateRegistered {
+				continue
+			}
+
+			cc.serverChan <- &ServerMessage{
+				message: ParseMessage(msg),
+				cAddr: cc.conn.RemoteAddr(),
+			}
 		case NickCmd:
 			if cc.state == clientStateRegistering {
 				cc.clientUser.Nick = msg.Params[0]

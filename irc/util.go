@@ -1,6 +1,13 @@
 package irc
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+type Messagable interface {
+	ToMessage() *Message
+}
 
 // User represents a user identified by a nick and an ident
 type User struct {
@@ -80,5 +87,56 @@ func (j *Join) ToMessage() *Message {
 		j.User.String(),
 		JoinCmd,
 		[]string{j.Channel},
+	}
+}
+
+// ParseUserString pares a string into an IRC User
+func ParseUserString(s string) User {
+	if s == "" {
+		return User{}
+	}
+
+	splitForHost := strings.Split(s, "@")
+
+	var host string
+	if len(splitForHost) > 1 {
+		host = splitForHost[1]
+	}
+
+	var nick string
+	var ident string
+	splitForIdent := strings.Split(splitForHost[0], "!")
+	if len(splitForIdent) > 1 {
+		ident = splitForIdent[1]
+	}
+	nick = splitForIdent[0]
+
+	return User{
+		Nick:  nick,
+		Ident: ident,
+		Host:  host,
+	}
+}
+
+// ParseMessage parses an IRC Message into a higher-level IRC type
+func ParseMessage(m *Message) Messagable {
+	switch m.Cmd {
+	case PrivmsgCmd:
+		var channel string
+		var msg string
+		if len(m.Params) == 1 {
+			channel = m.Params[0]
+		} else if len(m.Params) > 1 {
+			channel = m.Params[0]
+			msg = m.Params[1]
+		}
+
+		return &Privmsg{
+			From:    ParseUserString(m.Prefix),
+			Channel: channel,
+			Message: msg,
+		}
+	default:
+		return &Privmsg{}
 	}
 }

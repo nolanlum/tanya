@@ -209,6 +209,12 @@ func (sc *SlackClient) Initialize(token string) {
 	sc.rtm = sc.client.NewRTM()
 }
 
+// SendMessage sends a message to a SlackChannel
+func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
+	_, _, err := sc.client.PostMessage(channel.SlackID, msg, slack.PostMessageParameters{})
+	return err
+}
+
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
 	return &SlackEvent{
 		EventType: MessageEvent,
