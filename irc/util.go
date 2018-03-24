@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Messagable is a type that can be converted to an IRC message
 type Messagable interface {
 	ToMessage() *Message
 }

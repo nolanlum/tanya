@@ -105,7 +105,7 @@ func (cc *clientConnection) handleConnInput() {
 
 			cc.serverChan <- &ServerMessage{
 				message: ParseMessage(msg),
-				cAddr: cc.conn.RemoteAddr(),
+				cAddr:   cc.conn.RemoteAddr(),
 			}
 		case NickCmd:
 			if cc.state == clientStateRegistering {
