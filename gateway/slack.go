@@ -211,8 +211,8 @@ func (sc *SlackClient) Initialize(token string) {
 
 // SendMessage sends a message to a SlackChannel
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
-	_, _, err := sc.client.PostMessage(channel.SlackID, msg, slack.PostMessageParameters{})
-	return err
+	sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage(msg, channel.SlackID))
+	return nil
 }
 
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
@@ -347,6 +347,13 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "channel_marked", "group_marked", "latency_report", "user_typing", "pref_change":
 				// haha nobody cares about this
+
+			case "ack":
+				// maybe we care about this
+				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
+					continue
+				}
+				fallthrough
 
 			default:
 				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
