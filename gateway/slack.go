@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/nlopes/slack"
 )
@@ -12,6 +13,7 @@ import (
 type SlackChannel struct {
 	SlackID string
 	Name    string
+	Created time.Time
 
 	Topic slack.Topic
 }
@@ -20,6 +22,7 @@ func slackChannelFromDto(channel *slack.Channel) *SlackChannel {
 	return &SlackChannel{
 		SlackID: channel.ID,
 		Name:    "#" + channel.Name,
+		Created: channel.Created.Time(),
 		Topic:   channel.Topic,
 	}
 }
@@ -325,6 +328,28 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 							sc.ParseMessageText(subMessage.Attachments[0].Text),
 						),
 					)
+
+				case "channel_topic":
+					user, err := sc.ResolveUser(messageData.User)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+
+					channel, err := sc.ResolveChannel(messageData.Channel)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+
+					chans.IncomingChan <- &SlackEvent{
+						EventType: TopicChangeEvent,
+						Data: &TopicChangeEventData{
+							From:     *user,
+							Target:   channel.Name,
+							NewTopic: messageData.Topic,
+						},
+					}
 
 				default:
 					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
