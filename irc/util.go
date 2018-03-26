@@ -91,6 +91,22 @@ func (j *Join) ToMessage() *Message {
 	}
 }
 
+// Topic is a TOPIC message
+type Topic struct {
+	From    User
+	Channel string
+	Topic   string
+}
+
+// ToMessage turns a Topic into a Message
+func (t *Topic) ToMessage() *Message {
+	return &Message{
+		t.From.String(),
+		TopicCmd,
+		[]string{t.Channel, t.Topic},
+	}
+}
+
 // ParseUserString pares a string into an IRC User
 func ParseUserString(s string) User {
 	if s == "" {
