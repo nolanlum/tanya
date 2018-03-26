@@ -244,6 +244,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 		default:
 			event := <-sc.rtm.IncomingEvents
 			switch event.Type {
+			case "connection_error":
+				connEventError := event.Data.(*slack.ConnectionErrorEvent)
+				log.Printf("error connecting to slack: %v\n", connEventError.Error())
+
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
 				sc.bootstrapMappings()
