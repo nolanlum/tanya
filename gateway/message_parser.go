@@ -64,7 +64,7 @@ func (sc *SlackClient) ParseMessageText(text string) string {
 func (sc *SlackClient) UnparseMessageText(text string) string {
 	text = sc.slackURLEncoder.Replace(text)
 
-	atMentionRegex := regexp.MustCompile(`@[A-Za-z][A-Za-z0-9_\-]*`)
+	atMentionRegex := regexp.MustCompile(`@[A-Za-z][A-Za-z0-9_\- ]*`)
 	uniqueMentions := make(map[string]string)
 	for _, match := range atMentionRegex.FindAllString(text, -1) {
 		uniqueMentions[match] = match

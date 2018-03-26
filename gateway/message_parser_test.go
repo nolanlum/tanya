@@ -115,6 +115,20 @@ func TestSlackClient_UnparseMessageText(t *testing.T) {
 			want: "le <@U2VEKS57B> face",
 		},
 		{
+			name: "nick reference with nbsp",
+			fields: fields{
+				userInfo: map[string]*SlackUser{
+					"U267NCD1U": {
+						SlackID:  "U267NCD1U",
+						Nick:     "cozzie\u00a0alert",
+						RealName: "Cozzie Kuns",
+					},
+				},
+			},
+			text: "le @cozzie\u00a0alert face",
+			want: "le <@U267NCD1U> face",
+		},
+		{
 			name: "IRC quote",
 			fields: fields{
 				userInfo: map[string]*SlackUser{

@@ -43,6 +43,7 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	if nick == "" {
 		nick = user.Profile.RealNameNormalized
 	}
+	nick = strings.Replace(nick, " ", "\u00a0", -1)
 
 	return &SlackUser{
 		SlackID:  user.ID,
@@ -434,6 +435,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				sc.Lock()
 				sc.userInfo[newUserInfo.SlackID] = newUserInfo
+				delete(sc.nickToUserMap, oldUserInfo.Nick)
 				sc.nickToUserMap[newUserInfo.Nick] = newUserInfo.SlackID
 				sc.Unlock()
 
