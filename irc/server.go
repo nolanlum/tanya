@@ -122,9 +122,7 @@ func (s *Server) handleIncomingMessageRouting(incomingMessages <-chan *ServerMes
 
 			s.RLock()
 			for addr, conn := range s.clientConnections {
-				log.Printf("addr: %v msg.cAddr: %v\n", addr, msg.cAddr)
 				if addr != msg.cAddr {
-					log.Printf("I am sending a message to the client\n")
 					conn.outgoingMessages <- msg.message.ToMessage()
 				}
 			}
