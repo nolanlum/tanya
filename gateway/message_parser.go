@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"fmt"
 	"log"
+	"regexp"
 	"strings"
 )
 
@@ -56,4 +58,29 @@ func (sc *SlackClient) ParseMessageText(text string) string {
 	}
 
 	return sc.slackURLDecoder.Replace(parsedMessageBuilder.String())
+}
+
+// UnparseMessageText takes a IRC message and inserts user references
+func (sc *SlackClient) UnparseMessageText(text string) string {
+	text = sc.slackURLEncoder.Replace(text)
+
+	atMentionRegex := regexp.MustCompile(`@[A-Za-z][A-Za-z0-9_\-]*`)
+	uniqueMentions := make(map[string]string)
+	for _, match := range atMentionRegex.FindAllString(text, -1) {
+		uniqueMentions[match] = match
+	}
+
+	for mention := range uniqueMentions {
+		if user := sc.ResolveNickToUser(mention[1:]); user != nil {
+			uniqueMentions[mention] = fmt.Sprintf("<@%v>", user.SlackID)
+		}
+	}
+
+	replacements := make([]string, 0)
+	for mention, id := range uniqueMentions {
+		replacements = append(replacements, mention, id)
+	}
+
+	replacer := strings.NewReplacer(replacements...)
+	return replacer.Replace(text)
 }

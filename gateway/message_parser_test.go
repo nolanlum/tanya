@@ -76,3 +76,75 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 		})
 	}
 }
+
+func TestSlackClient_UnparseMessageText(t *testing.T) {
+	type fields struct {
+		channelInfo map[string]*SlackChannel
+		userInfo    map[string]*SlackUser
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		text   string
+		want   string
+	}{
+		{
+			name:   "normal message",
+			fields: fields{},
+			text:   "haha this is a message",
+			want:   "haha this is a message",
+		},
+		{
+			name:   "urlencode",
+			fields: fields{},
+			text:   "haha this is a <message> & poop",
+			want:   "haha this is a &lt;message&gt; &amp; poop",
+		},
+		{
+			name: "nick reference",
+			fields: fields{
+				userInfo: map[string]*SlackUser{
+					"U2VEKS57B": {
+						SlackID:  "U2VEKS57B",
+						Nick:     "papika",
+						RealName: "ピュア バリアー",
+					},
+				},
+			},
+			text: "le @papika face",
+			want: "le <@U2VEKS57B> face",
+		},
+		{
+			name: "IRC quote",
+			fields: fields{
+				userInfo: map[string]*SlackUser{
+					"U267NCD1U": {
+						SlackID:  "U267NCD1U",
+						Nick:     "kedo",
+						RealName: "Kenny Do",
+					},
+				},
+			},
+			text: "<@kedo> i like my girls like I like my boys... feminine",
+			want: "&lt;<@U267NCD1U>&gt; i like my girls like I like my boys... feminine",
+		},
+		{
+			name:   "IRC quote without user info",
+			fields: fields{},
+			text:   "<@kedo> i like my girls like I like my boys... feminine",
+			want:   "&lt;@kedo&gt; i like my girls like I like my boys... feminine",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := NewSlackClient()
+			sc.channelInfo = tt.fields.channelInfo
+			sc.userInfo = tt.fields.userInfo
+			sc.regenerateReverseMappings()
+
+			if got := sc.UnparseMessageText(tt.text); got != tt.want {
+				t.Errorf("SlackClient.UnparseMessageText() = \"%v\", want \"%v\"", got, tt.want)
+			}
+		})
+	}
+}
