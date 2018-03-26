@@ -190,6 +190,7 @@ ScanLoop:
 			if len(msg.Params) == 1 {
 				cc.sendChannelTopic(msg.Params[0])
 			} else {
+				// nolint: megacheck
 				// TODO implement setting the topic
 			}
 
