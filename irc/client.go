@@ -78,6 +78,8 @@ func (cc *clientConnection) handleConnInput() {
 	}()
 
 	s := bufio.NewScanner(cc.conn)
+
+ScanLoop:
 	for s.Scan() {
 		// Reads a line with s.Text() and parses it as
 		// an IRC message
@@ -147,6 +149,16 @@ func (cc *clientConnection) handleConnInput() {
 			channels := strings.Split(msg.Params[0], ",")
 
 			for _, channelName := range channels {
+				// Slack channel names are forcibly lowercased...RIP casemapping
+				channelName = strings.ToLower(channelName)
+
+				// Ignore if we've already joined this channel (to avoid sending WHO/NAMES again)
+				for _, joinedChannel := range cc.stateProvider.GetJoinedChannels() {
+					if channelName == joinedChannel {
+						continue ScanLoop
+					}
+				}
+
 				// TODO make this actually join if we're not already a part of the channel
 				cc.handleChannelJoined(channelName)
 			}
@@ -155,6 +167,24 @@ func (cc *clientConnection) handleConnInput() {
 			// TODO make this do more than just echo
 			msg.Prefix = cc.clientUser.String()
 			cc.outgoingMessages <- msg
+
+		case ModeCmd:
+			if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
+				// For Slack we only want to handle querying channel modes...
+				// And they'll always be just +nt
+				continue
+			}
+
+			cc.outgoingMessages <- cc.reply(NumericReply{
+				Code:   RPL_CHANNELMODEIS,
+				Params: []string{msg.Params[0], "+nt"},
+			})
+
+			ctime := cc.stateProvider.GetChannelCTime(msg.Params[0])
+			cc.outgoingMessages <- cc.reply(NumericReply{
+				Code:   RPL_CREATIONTIME,
+				Params: []string{msg.Params[0], fmt.Sprintf("%v", ctime.Unix())},
+			})
 
 		case WhoCmd:
 			if len(msg.Params) < 1 {
@@ -252,14 +282,19 @@ func (cc *clientConnection) handleChannelJoined(channelName string) {
 	}).ToMessage()
 	cc.outgoingMessages <- joinResponse
 
-	// TODO actually look up the topic info here
+	topic := cc.stateProvider.GetChannelTopic(channelName)
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
-		Params: []string{channelName, "haha this is a topic"},
+		Params: []string{channelName, topic.Topic},
 	})
+
+	setBy := cc.config.ServerName
+	if topic.SetBy != "" {
+		setBy = topic.SetBy
+	}
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC_WHOTIME,
-		Params: []string{channelName, "tanya", "0"},
+		Params: []string{channelName, setBy, fmt.Sprintf("%v", topic.SetAt.Unix())},
 	})
 
 	users := cc.stateProvider.GetChannelUsers(channelName)

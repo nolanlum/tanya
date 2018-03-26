@@ -4,6 +4,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
+	"time"
 
 	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
@@ -39,6 +41,14 @@ func slackToNick(n *gateway.NickChangeEventData) *irc.Nick {
 	}
 }
 
+func slackToTopic(t *gateway.TopicChangeEventData) *irc.Topic {
+	return &irc.Topic{
+		From:    slackUserToIRCUser(&t.From),
+		Channel: t.Target,
+		Topic:   t.NewTopic,
+	}
+}
+
 // this name specially chosen to trigger ATRAN
 type corpusCallosum struct {
 	sc *gateway.SlackClient
@@ -63,6 +73,41 @@ func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
 		users = append(users, slackUserToIRCUser(&user))
 	}
 	return users
+}
+
+// GetChannelTopic implements irc.ServerStateProvider.GetChannelTopic
+func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelTopic) {
+	channel := c.sc.ResolveNameToChannel(channelName)
+	if channel == nil {
+		log.Printf("error while querying topic for %v: channel_not_found", channelName)
+		return
+	}
+
+	topic.Topic = c.sc.ParseMessageText(channel.Topic.Value)
+	topic.Topic = strings.Replace(topic.Topic, "\n", " ", -1)
+	topic.SetAt = channel.Topic.LastSet.Time()
+
+	if channel.Topic.Creator != "" {
+		setBy, err := c.sc.ResolveUser(channel.Topic.Creator)
+		if err != nil {
+			log.Printf("error while querying topic creator for %v: %v", channelName, err)
+			return
+		}
+		topic.SetBy = setBy.Nick
+	}
+
+	return
+}
+
+// GetChannelCTime implements irc.ServerStateProvider.GetChannelCTime
+func (c *corpusCallosum) GetChannelCTime(channelName string) time.Time {
+	channel := c.sc.ResolveNameToChannel(channelName)
+	if channel == nil {
+		log.Printf("error while querying ctime for %v: channel_not_found", channelName)
+		return time.Time{}
+	}
+
+	return channel.Created
 }
 
 // GetJoinedChannels implements irc.ServerStateProvider.GetJoinedChannels
@@ -111,6 +156,9 @@ Loop:
 			case gateway.NickChangeEvent:
 				n := slackToNick(msg.Data.(*gateway.NickChangeEventData))
 				sendChan <- n.ToMessage()
+			case gateway.TopicChangeEvent:
+				t := slackToTopic(msg.Data.(*gateway.TopicChangeEventData))
+				sendChan <- t.ToMessage()
 			}
 		}
 	}

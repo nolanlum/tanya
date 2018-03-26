@@ -8,6 +8,7 @@ const (
 	SlackConnectedEvent SlackEventType = iota
 	MessageEvent
 	NickChangeEvent
+	TopicChangeEvent
 	JoinEvent
 	PartEvent
 )
@@ -37,4 +38,11 @@ type MessageEventData struct {
 type NickChangeEventData struct {
 	From    SlackUser
 	NewNick string
+}
+
+// TopicChangeEventData represents a user changing the channel topic
+type TopicChangeEventData struct {
+	From     SlackUser
+	Target   string
+	NewTopic string
 }

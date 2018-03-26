@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Server represents the IRC server listener for bridging IRC clients to Slack
@@ -25,6 +26,13 @@ type Server struct {
 type ServerMessage struct {
 	message Messagable
 	cAddr   net.Addr
+}
+
+// ChannelTopic represents a channel's set topic and metadata
+type ChannelTopic struct {
+	Topic string
+	SetBy string
+	SetAt time.Time
 }
 
 // NewServer creates a new IRC server
@@ -180,6 +188,11 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 type ServerStateProvider interface {
 	GetChannelUsers(channelName string) []User
 
+	GetChannelTopic(channelName string) ChannelTopic
+
+	GetChannelCTime(channelName string) time.Time
+
 	GetJoinedChannels() []string
+
 	SendPrivmsg(privMsg *Privmsg)
 }
