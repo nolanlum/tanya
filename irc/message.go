@@ -153,6 +153,9 @@ func StringToMessage(str string) (*Message, error) {
 	case "MODE":
 		return &Message{prefix, ModeCmd, params}, nil
 	case "TOPIC":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("TOPIC")
+		}
 		return &Message{prefix, TopicCmd, params}, nil
 	case "WHO":
 		return &Message{prefix, WhoCmd, params}, nil

@@ -186,6 +186,13 @@ ScanLoop:
 				Params: []string{msg.Params[0], fmt.Sprintf("%v", ctime.Unix())},
 			})
 
+		case TopicCmd:
+			if len(msg.Params) == 1 {
+				cc.sendChannelTopic(msg.Params[0])
+			} else {
+				// TODO implement setting the topic
+			}
+
 		case WhoCmd:
 			if len(msg.Params) < 1 {
 				// Technically this is allowed but we'll just ignore it.
@@ -275,13 +282,7 @@ func (cc *clientConnection) sendWelcome() {
 	}
 }
 
-func (cc *clientConnection) handleChannelJoined(channelName string) {
-	joinResponse := (&Join{
-		User:    cc.clientUser,
-		Channel: channelName,
-	}).ToMessage()
-	cc.outgoingMessages <- joinResponse
-
+func (cc *clientConnection) sendChannelTopic(channelName string) {
 	topic := cc.stateProvider.GetChannelTopic(channelName)
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
@@ -296,6 +297,16 @@ func (cc *clientConnection) handleChannelJoined(channelName string) {
 		Code:   RPL_TOPIC_WHOTIME,
 		Params: []string{channelName, setBy, fmt.Sprintf("%v", topic.SetAt.Unix())},
 	})
+}
+
+func (cc *clientConnection) handleChannelJoined(channelName string) {
+	joinResponse := (&Join{
+		User:    cc.clientUser,
+		Channel: channelName,
+	}).ToMessage()
+	cc.outgoingMessages <- joinResponse
+
+	cc.sendChannelTopic(channelName)
 
 	users := cc.stateProvider.GetChannelUsers(channelName)
 	for _, m := range NamelistAsNumerics(users, channelName) {
