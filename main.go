@@ -74,6 +74,17 @@ func (c *corpusCallosum) GetJoinedChannels() []string {
 	return channelNames
 }
 
+// SendPrivmsg sends an IRC PRIVMSG through Slack resolving channels properly
+func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
+	// TODO: we should enforce that we are not sending PRIVMSGs from other people
+
+	channel := c.sc.ResolveNameToChannel(privMsg.Channel)
+	err := c.sc.SendMessage(channel, privMsg.Message)
+	if err != nil {
+		log.Printf("error sending slack message: %v\n", err)
+	}
+}
+
 func writeMessageLoop(
 	recvChan <-chan *gateway.SlackEvent,
 	sendChan chan<- *irc.Message,
