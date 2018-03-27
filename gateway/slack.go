@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nlopes/slack"
@@ -42,6 +43,7 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	if nick == "" {
 		nick = user.Profile.RealNameNormalized
 	}
+	nick = strings.Replace(nick, " ", "\u00a0", -1)
 
 	return &SlackUser{
 		SlackID:  user.ID,
@@ -60,8 +62,13 @@ type SlackClient struct {
 	userInfo           map[string]*SlackUser
 	channelMemberships map[string]*SlackChannel
 
+	nickToUserMap      map[string]string
+	channelNameToIDMap map[string]string
+
 	slackURLEncoder *strings.Replacer
 	slackURLDecoder *strings.Replacer
+
+	sync.RWMutex
 }
 
 // NewSlackClient creates a new SlackClient with some default values
@@ -78,6 +85,10 @@ func NewSlackClient() *SlackClient {
 
 // Make the initial Slack calls to bootstrap our connection
 func (sc *SlackClient) bootstrapMappings() {
+	channelInfo := make(map[string]*SlackChannel)
+	userInfo := make(map[string]*SlackUser)
+	channelMemberships := make(map[string]*SlackChannel)
+
 	hasMore := true
 	gcp := &slack.GetConversationsParameters{
 		ExcludeArchived: "true",
@@ -95,9 +106,9 @@ func (sc *SlackClient) bootstrapMappings() {
 		for _, channel := range channels {
 			slackChannel := slackChannelFromDto(&channel)
 
-			sc.channelInfo[channel.ID] = slackChannel
+			channelInfo[channel.ID] = slackChannel
 			if channel.IsMember {
-				sc.channelMemberships[channel.ID] = slackChannel
+				channelMemberships[channel.ID] = slackChannel
 			}
 		}
 
@@ -109,7 +120,32 @@ func (sc *SlackClient) bootstrapMappings() {
 		log.Fatalln(err)
 	}
 	for _, user := range users {
-		sc.userInfo[user.ID] = slackUserFromDto(&user)
+		userInfo[user.ID] = slackUserFromDto(&user)
+	}
+
+	sc.Lock()
+	sc.channelInfo = channelInfo
+	sc.userInfo = userInfo
+	sc.channelMemberships = channelMemberships
+	sc.Unlock()
+
+	sc.regenerateReverseMappings()
+}
+
+// Regenerate the cached reverse nick/channel name mappings
+// If two channels have the same name, then whelp the first one we find wins
+func (sc *SlackClient) regenerateReverseMappings() {
+	sc.Lock()
+	defer sc.Unlock()
+
+	sc.nickToUserMap = make(map[string]string)
+	for _, user := range sc.userInfo {
+		sc.nickToUserMap[user.Nick] = user.SlackID
+	}
+
+	sc.channelNameToIDMap = make(map[string]string)
+	for _, channel := range sc.channelInfo {
+		sc.channelNameToIDMap[channel.Name] = channel.SlackID
 	}
 }
 
@@ -124,9 +160,12 @@ func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) 
 	if err != nil {
 		return
 	}
-
 	user = slackUserFromDto(userInfo)
-	sc.userInfo[userInfo.ID] = user
+
+	sc.Lock()
+	sc.userInfo[user.SlackID] = user
+	sc.nickToUserMap[user.Nick] = user.SlackID
+	sc.Unlock()
 	return
 }
 
@@ -141,18 +180,46 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 	if err != nil {
 		return
 	}
-
 	channel = slackChannelFromDto(channelInfo)
-	sc.channelInfo[channelInfo.ID] = channel
+
+	sc.Lock()
+	sc.channelInfo[channel.SlackID] = channel
+	sc.channelNameToIDMap[channel.Name] = channel.SlackID
+	sc.Unlock()
 	return
 }
 
 // ResolveNameToChannel takes a channel name and fetches a SlackChannel with that name
-// If two channels have the same name, then whelp the first one we find wins
 func (sc *SlackClient) ResolveNameToChannel(channelName string) *SlackChannel {
-	for _, channelInfo := range sc.channelInfo {
-		if channelInfo.Name == channelName {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	if channelID, found := sc.channelNameToIDMap[channelName]; found {
+		if channelInfo, found := sc.channelInfo[channelID]; found {
+			if channelInfo.Name != channelName {
+				log.Panicf("SlackClient.channelNameToIDMap had stale data: %v = %v != %v",
+					channelName, channelID, channelInfo.Name)
+			}
+
 			return channelInfo
+		}
+	}
+
+	return nil
+}
+
+// ResolveNickToUser takes a nick and fetches a SlackUser with that nick
+func (sc *SlackClient) ResolveNickToUser(nick string) *SlackUser {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	if userID, found := sc.nickToUserMap[nick]; found {
+		if userInfo, found := sc.userInfo[userID]; found {
+			if userInfo.Nick != nick {
+				log.Panicf("SlackClient.nickToUserMap had stale data: %v = %v != %v", nick, userID, userInfo.Nick)
+			}
+
+			return userInfo
 		}
 	}
 
@@ -191,6 +258,9 @@ func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err
 
 // GetChannelMemberships returns the channels this SlackClient is a member of
 func (sc *SlackClient) GetChannelMemberships() (channels []SlackChannel) {
+	sc.RLock()
+	defer sc.RUnlock()
+
 	for _, channel := range sc.channelMemberships {
 		channels = append(channels, *channel)
 	}
@@ -214,6 +284,7 @@ func (sc *SlackClient) Initialize(token string) {
 
 // SendMessage sends a message to a SlackChannel
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
+	msg = sc.UnparseMessageText(msg)
 	sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage(msg, channel.SlackID))
 	return nil
 }
@@ -361,7 +432,12 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				// Update user info based on the new DTO
 				oldUserInfo := sc.userInfo[userData.User.ID]
 				newUserInfo := slackUserFromDto(&userData.User)
-				sc.userInfo[userData.User.ID] = newUserInfo
+
+				sc.Lock()
+				sc.userInfo[newUserInfo.SlackID] = newUserInfo
+				delete(sc.nickToUserMap, oldUserInfo.Nick)
+				sc.nickToUserMap[newUserInfo.Nick] = newUserInfo.SlackID
+				sc.Unlock()
 
 				// Send nick change event if necessary
 				if oldUserInfo.Nick != newUserInfo.Nick {
