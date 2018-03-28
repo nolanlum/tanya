@@ -9,7 +9,7 @@ func TestToMessage(t *testing.T) {
 	msgStr := "hi im a poop"
 	p := &Privmsg{
 		From:    User{"poop", "poopser", "", "poop", false},
-		Target: "#chatter-technical",
+		Target:  "#chatter-technical",
 		Message: msgStr,
 	}
 
@@ -34,7 +34,7 @@ func TestToMessage(t *testing.T) {
 
 func TestToMessageEmptyPrefix(t *testing.T) {
 	p := &Privmsg{
-		Target: "chatter-technical",
+		Target:  "chatter-technical",
 		Message: "hi im a poop",
 	}
 
