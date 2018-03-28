@@ -399,7 +399,6 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "message":
 				messageData := event.Data.(*slack.MessageEvent)
-				//log.Printf("messageData: %v\n", messageData)
 
 				switch messageData.SubType {
 				case "":
@@ -409,6 +408,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						continue
 					}
 
+					var messageEventTarget string
 					if isDmChannel(messageData.Channel) {
 						target, err := sc.ResolveDMToUser(messageData.Channel)
 						if err != nil {
@@ -416,16 +416,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 							continue
 						}
 
-						if messageData.Text != "" {
-							chans.IncomingChan <- newSlackMessageEvent(
-								user, target.Nick, sc.ParseMessageText(messageData.Text))
-						} else {
-							// Maybe we have an attachment instead.
-							for _, attachment := range messageData.Attachments {
-								chans.IncomingChan <- newSlackMessageEvent(
-									user, target.Nick, sc.slackURLDecoder.Replace(attachment.Fallback))
-							}
-						}
+						messageEventTarget = target.Nick
 
 					} else {
 						channel, err := sc.ResolveChannel(messageData.Channel)
@@ -434,17 +425,18 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 							continue
 						}
 
-						if messageData.Text != "" {
-							chans.IncomingChan <- newSlackMessageEvent(
-								user, channel.Name, sc.ParseMessageText(messageData.Text))
-						} else {
-							// Maybe we have an attachment instead.
-							for _, attachment := range messageData.Attachments {
-								chans.IncomingChan <- newSlackMessageEvent(
-									user, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
-							}
-						}
+						messageEventTarget = channel.Name
+					}
 
+					if messageData.Text != "" {
+						chans.IncomingChan <- newSlackMessageEvent(
+							user, messageEventTarget, sc.ParseMessageText(messageData.Text))
+					} else {
+						// Maybe we have an attachment instead.
+						for _, attachment := range messageData.Attachments {
+							chans.IncomingChan <- newSlackMessageEvent(
+								user, messageEventTarget, sc.slackURLDecoder.Replace(attachment.Fallback))
+						}
 					}
 
 				case "message_changed":
