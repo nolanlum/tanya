@@ -46,6 +46,16 @@ func (p *Privmsg) ToMessage() *Message {
 	}
 }
 
+// IsTargetChannel returns whether the target for this PrivMsg is a channel
+func (p *Privmsg) IsTargetChannel() bool {
+	return len(p.Target) > 0 && p.Target[0] == '#'
+}
+
+// IsValidTarget returns whether the private message target is legal or not
+func (p *Privmsg) IsValidTarget() bool {
+	return len(p.Target) > 0
+}
+
 // Nick represents a IRC user nick change event
 type Nick struct {
 	From    User
@@ -150,7 +160,7 @@ func ParseMessage(m *Message) Messagable {
 
 		return &Privmsg{
 			From:    ParseUserString(m.Prefix),
-			Target: target,
+			Target:  target,
 			Message: msg,
 		}
 	default:

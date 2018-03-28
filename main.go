@@ -29,7 +29,7 @@ func slackUserToIRCUser(s *gateway.SlackUser) irc.User {
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 	return &irc.Privmsg{
 		From:    slackUserToIRCUser(&m.From),
-		Target: m.Target,
+		Target:  m.Target,
 		Message: m.Message,
 	}
 }
@@ -128,13 +128,13 @@ func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 		return
 	}
 
-	if len(privMsg.Target) > 1 && privMsg.Target[0] == '#' {
+	if privMsg.IsTargetChannel() {
 		channel := c.sc.ResolveNameToChannel(privMsg.Target)
 		err := c.sc.SendMessage(channel, privMsg.Message)
 		if err != nil {
 			log.Printf("error sending slack message: %v\n", err)
 		}
-	} else if len(privMsg.Target) > 0 {
+	} else if privMsg.IsValidTarget() {
 		slackUser := c.sc.ResolveNickToUser(privMsg.Target)
 		if slackUser != nil {
 			c.sc.SendDirectMessage(slackUser, privMsg.Message)

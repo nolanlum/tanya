@@ -254,7 +254,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 	}
 
 	sc.Lock()
-	for _, im := range(ims) {
+	for _, im := range ims {
 		// Skip this IM if we cannot find the user it belongs to
 		if userInfo, found := sc.userInfo[im.User]; found {
 			sc.dmInfo[im.ID] = userInfo
@@ -268,7 +268,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 	if slackUser != nil {
 		return slackUser, nil
 	}
-	
+
 	return nil, fmt.Errorf("could not find user for DM: %s", dmChannelID)
 }
 
@@ -426,7 +426,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 									user, target.Nick, sc.slackURLDecoder.Replace(attachment.Fallback))
 							}
 						}
-						
+
 					} else {
 						channel, err := sc.ResolveChannel(messageData.Channel)
 						if err != nil {
@@ -444,7 +444,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 									user, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
 							}
 						}
-						
+
 					}
 
 				case "message_changed":
