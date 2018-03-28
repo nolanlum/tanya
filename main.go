@@ -29,7 +29,7 @@ func slackUserToIRCUser(s *gateway.SlackUser) irc.User {
 func slackToPrivmsg(m *gateway.MessageEventData) *irc.Privmsg {
 	return &irc.Privmsg{
 		From:    slackUserToIRCUser(&m.From),
-		Channel: m.Target,
+		Target: m.Target,
 		Message: m.Message,
 	}
 }
@@ -123,10 +123,22 @@ func (c *corpusCallosum) GetJoinedChannels() []string {
 func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 	// TODO: we should enforce that we are not sending PRIVMSGs from other people
 
-	channel := c.sc.ResolveNameToChannel(privMsg.Channel)
-	err := c.sc.SendMessage(channel, privMsg.Message)
-	if err != nil {
-		log.Printf("error sending slack message: %v\n", err)
+	// Don't bother sending anything on an empty message
+	if len(privMsg.Message) == 0 {
+		return
+	}
+
+	if len(privMsg.Target) > 1 && privMsg.Target[0] == '#' {
+		channel := c.sc.ResolveNameToChannel(privMsg.Target)
+		err := c.sc.SendMessage(channel, privMsg.Message)
+		if err != nil {
+			log.Printf("error sending slack message: %v\n", err)
+		}
+	} else if len(privMsg.Target) > 0 {
+		slackUser := c.sc.ResolveNickToUser(privMsg.Target)
+		if slackUser != nil {
+			c.sc.SendDirectMessage(slackUser, privMsg.Message)
+		}
 	}
 }
 
