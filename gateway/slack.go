@@ -162,11 +162,14 @@ func (sc *SlackClient) regenerateReverseMappings() {
 
 // ResolveUser takes a slackID and fetches a SlackUser for the ID
 func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
+	sc.RLock()
 	user, found := sc.userInfo[slackID]
 	if found {
+		sc.RUnlock()
 		return
 	}
 
+	sc.RUnlock()
 	userInfo, err := sc.client.GetUserInfo(slackID)
 	if err != nil {
 		return
@@ -182,11 +185,14 @@ func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) 
 
 // ResolveChannel takes a slackID and fetches a SlackChannel for the ID
 func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, err error) {
+	sc.RLock()
 	channel, found := sc.channelInfo[slackID]
 	if found {
+		sc.RUnlock()
 		return
 	}
 
+	sc.RUnlock()
 	channelInfo, err := sc.client.GetConversationInfo(slackID, false)
 	if err != nil {
 		return
