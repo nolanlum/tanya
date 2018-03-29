@@ -33,7 +33,7 @@ func (u User) String() string {
 // Privmsg represents a line in an IRC conversation
 type Privmsg struct {
 	From    User
-	Channel string
+	Target  string
 	Message string
 }
 
@@ -42,8 +42,18 @@ func (p *Privmsg) ToMessage() *Message {
 	return &Message{
 		p.From.String(),
 		PrivmsgCmd,
-		[]string{p.Channel, p.Message},
+		[]string{p.Target, p.Message},
 	}
+}
+
+// IsTargetChannel returns whether the target for this PrivMsg is a channel
+func (p *Privmsg) IsTargetChannel() bool {
+	return len(p.Target) > 0 && p.Target[0] == '#'
+}
+
+// IsValidTarget returns whether the private message target is legal or not
+func (p *Privmsg) IsValidTarget() bool {
+	return len(p.Target) > 0
 }
 
 // Nick represents a IRC user nick change event
@@ -139,18 +149,18 @@ func ParseUserString(s string) User {
 func ParseMessage(m *Message) Messagable {
 	switch m.Cmd {
 	case PrivmsgCmd:
-		var channel string
+		var target string
 		var msg string
 		if len(m.Params) == 1 {
-			channel = m.Params[0]
+			target = m.Params[0]
 		} else if len(m.Params) > 1 {
-			channel = m.Params[0]
+			target = m.Params[0]
 			msg = m.Params[1]
 		}
 
 		return &Privmsg{
 			From:    ParseUserString(m.Prefix),
-			Channel: channel,
+			Target:  target,
 			Message: msg,
 		}
 	default:

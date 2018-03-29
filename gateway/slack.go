@@ -60,6 +60,7 @@ type SlackClient struct {
 
 	channelInfo        map[string]*SlackChannel
 	userInfo           map[string]*SlackUser
+	dmInfo             map[string]*SlackUser
 	channelMemberships map[string]*SlackChannel
 
 	nickToUserMap      map[string]string
@@ -87,6 +88,7 @@ func NewSlackClient() *SlackClient {
 func (sc *SlackClient) bootstrapMappings() {
 	channelInfo := make(map[string]*SlackChannel)
 	userInfo := make(map[string]*SlackUser)
+	dmInfo := make(map[string]*SlackUser)
 	channelMemberships := make(map[string]*SlackChannel)
 
 	hasMore := true
@@ -123,9 +125,18 @@ func (sc *SlackClient) bootstrapMappings() {
 		userInfo[user.ID] = slackUserFromDto(&user)
 	}
 
+	ims, err := sc.client.GetIMChannels()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	for _, im := range ims {
+		dmInfo[im.ID] = userInfo[im.User]
+	}
+
 	sc.Lock()
 	sc.channelInfo = channelInfo
 	sc.userInfo = userInfo
+	sc.dmInfo = dmInfo
 	sc.channelMemberships = channelMemberships
 	sc.Unlock()
 
@@ -151,11 +162,14 @@ func (sc *SlackClient) regenerateReverseMappings() {
 
 // ResolveUser takes a slackID and fetches a SlackUser for the ID
 func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
+	sc.RLock()
 	user, found := sc.userInfo[slackID]
 	if found {
+		sc.RUnlock()
 		return
 	}
 
+	sc.RUnlock()
 	userInfo, err := sc.client.GetUserInfo(slackID)
 	if err != nil {
 		return
@@ -171,11 +185,14 @@ func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) 
 
 // ResolveChannel takes a slackID and fetches a SlackChannel for the ID
 func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, err error) {
+	sc.RLock()
 	channel, found := sc.channelInfo[slackID]
 	if found {
+		sc.RUnlock()
 		return
 	}
 
+	sc.RUnlock()
 	channelInfo, err := sc.client.GetConversationInfo(slackID, false)
 	if err != nil {
 		return
@@ -224,6 +241,41 @@ func (sc *SlackClient) ResolveNickToUser(nick string) *SlackUser {
 	}
 
 	return nil
+}
+
+// ResolveDMToUser resolves a DM/IM Channel ID to the User the DM is for
+func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
+	sc.RLock()
+	slackUser, found := sc.dmInfo[dmChannelID]
+	sc.RUnlock()
+
+	if found {
+		return slackUser, nil
+	}
+
+	slackUser = nil
+	ims, err := sc.client.GetIMChannels()
+	if err != nil {
+		return nil, err
+	}
+
+	sc.Lock()
+	for _, im := range ims {
+		// Skip this IM if we cannot find the user it belongs to
+		if userInfo, found := sc.userInfo[im.User]; found {
+			sc.dmInfo[im.ID] = userInfo
+			if im.ID == dmChannelID {
+				slackUser = userInfo
+			}
+		}
+	}
+	sc.Unlock()
+
+	if slackUser != nil {
+		return slackUser, nil
+	}
+
+	return nil, fmt.Errorf("could not find user for DM: %s", dmChannelID)
 }
 
 // GetChannelUsers queries the Slack API for a list of users in the given channel, returning
@@ -289,6 +341,17 @@ func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
 	return nil
 }
 
+// SendDirectMessage sends a message to a SlackUser
+func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
+	msg = sc.UnparseMessageText(msg)
+	_, _, imChannelID, err := sc.client.OpenIMChannel(user.SlackID)
+	if err != nil {
+		return err
+	}
+	sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage(msg, imChannelID))
+	return nil
+}
+
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
 	return &SlackEvent{
 		EventType: MessageEvent,
@@ -303,6 +366,10 @@ func (sc *SlackClient) newInternalMessageEvent(message string) *SlackEvent {
 	}
 
 	return newSlackMessageEvent(tanyaInternalUser, to, message)
+}
+
+func isDmChannel(channelID string) bool {
+	return len(channelID) > 0 && channelID[0] == 'D'
 }
 
 // Poop is a goroutine entry point that handles the communication with Slack
@@ -346,20 +413,35 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						log.Println(err)
 						continue
 					}
-					channel, err := sc.ResolveChannel(messageData.Channel)
-					if err != nil {
-						log.Println(err)
-						continue
+
+					var messageEventTarget string
+					if isDmChannel(messageData.Channel) {
+						target, err := sc.ResolveDMToUser(messageData.Channel)
+						if err != nil {
+							fmt.Printf("error resolving DM: %v\n", err)
+							continue
+						}
+
+						messageEventTarget = target.Nick
+
+					} else {
+						channel, err := sc.ResolveChannel(messageData.Channel)
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+
+						messageEventTarget = channel.Name
 					}
 
 					if messageData.Text != "" {
 						chans.IncomingChan <- newSlackMessageEvent(
-							user, channel.Name, sc.ParseMessageText(messageData.Text))
+							user, messageEventTarget, sc.ParseMessageText(messageData.Text))
 					} else {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
 							chans.IncomingChan <- newSlackMessageEvent(
-								user, channel.Name, sc.slackURLDecoder.Replace(attachment.Fallback))
+								user, messageEventTarget, sc.slackURLDecoder.Replace(attachment.Fallback))
 						}
 					}
 
