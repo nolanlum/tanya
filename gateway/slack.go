@@ -532,7 +532,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 				}
 
-			case "channel_marked", "group_marked", "latency_report", "user_typing", "pref_change":
+			case "channel_marked", "group_marked", "latency_report",
+				"user_typing", "pref_change", "dnd_updated_user":
 				// haha nobody cares about this
 
 			case "ack":
