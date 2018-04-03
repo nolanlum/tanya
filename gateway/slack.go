@@ -509,6 +509,23 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						},
 					}
 
+				case "file_share":
+					user, err := sc.ResolveUser(messageData.User)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+
+					channel, err := sc.ResolveChannel(messageData.Channel)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+
+					file := messageData.File
+					message := fmt.Sprintf("%s uploaded a file: %s", user.Nick, file.URLPrivateDownload)
+					chans.IncomingChan <- newSlackMessageEvent(user, channel.Name, message)
+
 				default:
 					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
 				}
@@ -541,7 +558,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				fileSharedEvent := event.Data.(*slack.FileSharedEvent)
 				file := fileSharedEvent.File
 				if len(file.Channels) == 0 {
-					log.Println("file not shared to any channels")
+					log.Printf("file not shared to any channels: %v+\n", fileSharedEvent)
 					continue
 				}
 
@@ -560,10 +577,11 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				shareMessage := fmt.Sprintf(
 					"@%s shared a file: %s %s", user.Nick, file.Name, file.URLPrivateDownload,
 				)
-				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, shareMessage)
+				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
 
 			case "channel_marked", "group_marked", "latency_report",
-				"user_typing", "pref_change", "dnd_updated_user":
+				"user_typing", "pref_change", "dnd_updated_user",
+				"file_public":
 				// haha nobody cares about this
 
 			case "ack":
