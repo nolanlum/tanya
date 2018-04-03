@@ -532,6 +532,31 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 				}
 
+			case "file_shared":
+				fileSharedEvent := event.Data.(*slack.FileSharedEvent)
+				file := fileSharedEvent.File
+				if len(file.Channels) == 0 {
+					log.Println("file not shared to any channels")
+					continue
+				}
+
+				target, err := sc.ResolveChannel(file.Channels[0])
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				user, err := sc.ResolveUser(file.User)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+
+				shareMessage := fmt.Sprintf(
+					"@%s shared a file: %s %s", user.Nick, file.Name, file.URLPrivateDownload,
+				)
+				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, shareMessage)
+
 			case "channel_marked", "group_marked", "latency_report",
 				"user_typing", "pref_change", "dnd_updated_user":
 				// haha nobody cares about this
