@@ -72,7 +72,7 @@ func (m *Message) String() string {
 
 	for i, p := range m.Params {
 		b.WriteString(" ")
-		if i == len(m.Params)-1 && strings.ContainsRune(p, ' ') {
+		if i == len(m.Params)-1 && (strings.ContainsRune(p, ' ') || (len(p) > 0 && p[0] == ':')) {
 			b.WriteString(":")
 		}
 		b.WriteString(p)

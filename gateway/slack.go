@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"strings"
@@ -434,14 +435,18 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						messageEventTarget = channel.Name
 					}
 
-					if messageData.Text != "" {
-						chans.IncomingChan <- newSlackMessageEvent(
-							user, messageEventTarget, sc.ParseMessageText(messageData.Text))
-					} else {
+					messageText := sc.ParseMessageText(messageData.Text)
+					if messageText == "" {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
-							chans.IncomingChan <- newSlackMessageEvent(
-								user, messageEventTarget, sc.slackURLDecoder.Replace(attachment.Fallback))
+							messageText = messageText + sc.slackURLDecoder.Replace(attachment.Fallback) + "\n"
+						}
+					}
+					parsedMessage := bufio.NewScanner(strings.NewReader(messageText))
+					for parsedMessage.Scan() {
+						messageLine := parsedMessage.Text()
+						if len(messageLine) > 0 {
+							chans.IncomingChan <- newSlackMessageEvent(user, messageEventTarget, messageLine)
 						}
 					}
 
