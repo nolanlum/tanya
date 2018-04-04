@@ -116,7 +116,7 @@ func StringToMessage(str string) (*Message, error) {
 	}
 
 	for i := paramInd; i < len(splitStr); i++ {
-		if splitStr[i][0] == ':' {
+		if len(splitStr[i]) > 0 && splitStr[i][0] == ':' {
 			params = append(params, strings.Join(splitStr[i:], " ")[1:])
 			break
 		} else {
