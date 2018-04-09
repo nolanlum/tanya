@@ -558,11 +558,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				fileSharedEvent := event.Data.(*slack.FileSharedEvent)
 				file := fileSharedEvent.File
 				if len(file.Channels) == 0 {
-<<<<<<< HEAD
 					log.Printf("file not shared to any channels: %v+\n", fileSharedEvent)
-=======
-					log.Println("file not shared to any channels")
->>>>>>> master
 					continue
 				}
 
