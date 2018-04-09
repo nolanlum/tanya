@@ -72,11 +72,6 @@ func (cc *clientConnection) finishRegistration() {
 }
 
 func (cc *clientConnection) handleConnInput() {
-	defer func() {
-		close(cc.shutdown)
-		cc.conn.Close()
-	}()
-
 	defer cc.conn.Close()
 
 	s := bufio.NewScanner(cc.conn)
