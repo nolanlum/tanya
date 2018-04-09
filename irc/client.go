@@ -244,7 +244,6 @@ func (cc *clientConnection) sendWelcome() {
 			Params: []string{
 				"MAP",
 				"SILENCE=15",
-				"WHOX",
 				"WALLCHOPS",
 				"WALLVOICES",
 				"USERIP",
