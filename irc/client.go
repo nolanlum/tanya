@@ -80,7 +80,7 @@ SelectLoop:
 	for {
 		select {
 		case <-cc.shutdown:
-			break
+			return
 
 		default:
 			if !s.Scan() {
