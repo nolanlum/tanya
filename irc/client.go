@@ -84,6 +84,10 @@ SelectLoop:
 
 		default:
 			if !s.Scan() {
+				if err := s.Err(); err == nil {
+					return
+				}
+
 				continue
 			}
 			msgStr := s.Text()
