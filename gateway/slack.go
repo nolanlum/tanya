@@ -407,35 +407,47 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "message":
 				messageData := event.Data.(*slack.MessageEvent)
 
+				var sender *SlackUser
+				if messageData.User != "" {
+					var err error
+					if sender, err = sc.ResolveUser(messageData.User); err != nil {
+						log.Printf("could not resolve user for message [%v]: %+v", err, messageData)
+					}
+				}
+
+				var target string
+				if messageData.Channel != "" {
+					if isDmChannel(messageData.Channel) {
+						if targetUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
+							log.Printf("could not resolve DM target for message [%v]: %+v", err, messageData)
+						} else {
+							target = targetUser.Nick
+						}
+					} else {
+						if channel, err := sc.ResolveChannel(messageData.Channel); err != nil {
+							log.Printf("could not resolve channel for message [%v]: %+v", err, messageData)
+						} else {
+							target = channel.Name
+						}
+					}
+				}
+
 				switch messageData.SubType {
-				case "":
-					user, err := sc.ResolveUser(messageData.User)
-					if err != nil {
-						log.Println(err)
+				case "file_mention":
+					if messageData.User == sc.self.SlackID {
+						// Eat the "helpful" messages Slack sends when you send a link to a Slack upload.
+						continue
+					}
+					fallthrough
+				case "", "file_share":
+					if sender == nil || target == "" {
 						continue
 					}
 
-					var messageEventTarget string
-					if isDmChannel(messageData.Channel) {
-						target, err := sc.ResolveDMToUser(messageData.Channel)
-						if err != nil {
-							fmt.Printf("error resolving DM: %v\n", err)
-							continue
-						}
-
-						messageEventTarget = target.Nick
-
-					} else {
-						channel, err := sc.ResolveChannel(messageData.Channel)
-						if err != nil {
-							log.Println(err)
-							continue
-						}
-
-						messageEventTarget = channel.Name
-					}
-
-					messageText := sc.ParseMessageText(messageData.Text)
+					// Slack "abuses" the display/canonical URL feature of its markdown for file upload messages,
+					// so we'll keep them if we got here through any other case but the normal message subtype.
+					preserveSlackCanonicalizedURL := messageData.SubType != ""
+					messageText := sc.ParseMessageTextWithOptions(messageData.Text, preserveSlackCanonicalizedURL)
 					if messageText == "" {
 						// Maybe we have an attachment instead.
 						for _, attachment := range messageData.Attachments {
@@ -446,7 +458,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					for parsedMessage.Scan() {
 						messageLine := parsedMessage.Text()
 						if len(messageLine) > 0 {
-							chans.IncomingChan <- newSlackMessageEvent(user, messageEventTarget, messageLine)
+							chans.IncomingChan <- newSlackMessageEvent(sender, target, messageLine)
 						}
 					}
 
@@ -464,22 +476,17 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 					user, err := sc.ResolveUser(subMessage.User)
 					if err != nil {
-						log.Println(err)
-						continue
-					}
-					channel, err := sc.ResolveChannel(messageData.Channel)
-					if err != nil {
-						log.Println(err)
+						log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
 						continue
 					}
 					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorId)
 					if err != nil {
-						log.Println(err)
+						log.Printf("could not resolve quoted user for archive link [%v]: %+v", err, messageData.SubMessage)
 						continue
 					}
 					chans.IncomingChan <- newSlackMessageEvent(
 						user,
-						channel.Name,
+						target,
 						fmt.Sprintf(
 							"<%s> %s",
 							quotedUser.Nick,
@@ -488,43 +495,14 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					)
 
 				case "channel_topic":
-					user, err := sc.ResolveUser(messageData.User)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-
-					channel, err := sc.ResolveChannel(messageData.Channel)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-
 					chans.IncomingChan <- &SlackEvent{
 						EventType: TopicChangeEvent,
 						Data: &TopicChangeEventData{
-							From:     *user,
-							Target:   channel.Name,
+							From:     *sender,
+							Target:   target,
 							NewTopic: messageData.Topic,
 						},
 					}
-
-				case "file_share":
-					user, err := sc.ResolveUser(messageData.User)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-
-					channel, err := sc.ResolveChannel(messageData.Channel)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-
-					file := messageData.File
-					message := fmt.Sprintf("%s uploaded a file: %s", user.Nick, file.URLPrivateDownload)
-					chans.IncomingChan <- newSlackMessageEvent(user, channel.Name, message)
 
 				default:
 					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))

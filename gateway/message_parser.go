@@ -10,6 +10,12 @@ import (
 // ParseMessageText takes raw Slack message payload and resolves the user
 // and channel references
 func (sc *SlackClient) ParseMessageText(text string) string {
+	return sc.ParseMessageTextWithOptions(text, false)
+}
+
+// ParseMessageTextWithOptions takes raw Slack message payload, resolves the
+// user and channel references, and optionally preserves the Slack canonical URL.
+func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonicalURL bool) string {
 	parsedMessageBuilder := strings.Builder{}
 
 	// Find the first '<' if any, split into "before" and "after"
@@ -47,9 +53,13 @@ func (sc *SlackClient) ParseMessageText(text string) string {
 			parsedMessageBuilder.WriteString(channelRefParts[1])
 
 		default:
-			// A URL, we only care about the "display" portion that was actually sent.
+			// A URL, we usually only care about the "display" portion that was actually sent.
 			displayIdx := strings.Index(ref, "|")
 			parsedMessageBuilder.WriteString(ref[displayIdx+1:])
+			if includeCanonicalURL && displayIdx > 0 {
+				parsedMessageBuilder.WriteByte(' ')
+				parsedMessageBuilder.WriteString(ref[0:displayIdx])
+			}
 		}
 
 		// Do it again I guess.
