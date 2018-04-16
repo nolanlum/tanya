@@ -85,6 +85,7 @@ SelectLoop:
 		default:
 			if !s.Scan() {
 				if err := s.Err(); err == nil {
+					// Client conn hit an EOF
 					return
 				}
 
