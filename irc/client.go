@@ -84,11 +84,7 @@ SelectLoop:
 
 		default:
 			if !s.Scan() {
-				if err := s.Err(); err == nil {
-					// Client conn hit an EOF
-					close(cc.shutdown)
-				}
-
+				close(cc.shutdown)
 				continue
 			}
 			msgStr := s.Text()
