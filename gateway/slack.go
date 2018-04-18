@@ -412,6 +412,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					var err error
 					if sender, err = sc.ResolveUser(messageData.User); err != nil {
 						log.Printf("could not resolve user for message [%v]: %+v", err, messageData)
+						continue
 					}
 				}
 
@@ -420,12 +421,14 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					if isDmChannel(messageData.Channel) {
 						if targetUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
 							log.Printf("could not resolve DM target for message [%v]: %+v", err, messageData)
+							continue
 						} else {
 							target = targetUser.Nick
 						}
 					} else {
 						if channel, err := sc.ResolveChannel(messageData.Channel); err != nil {
 							log.Printf("could not resolve channel for message [%v]: %+v", err, messageData)
+							continue
 						} else {
 							target = channel.Name
 						}
@@ -474,6 +477,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						continue
 					}
 
+					if target == "" {
+						continue
+					}
+
 					user, err := sc.ResolveUser(subMessage.User)
 					if err != nil {
 						log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
@@ -495,6 +502,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					)
 
 				case "channel_topic":
+					if sender == nil || target == "" {
+						continue
+					}
+
 					chans.IncomingChan <- &SlackEvent{
 						EventType: TopicChangeEvent,
 						Data: &TopicChangeEventData{
