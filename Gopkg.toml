@@ -24,6 +24,10 @@
 #   go-tests = true
 #   unused-packages = true
 
+[[override]]
+  name = "github.com/nlopes/slack"
+  branch = "tanya"
+  source = "github.com/nolanlum/slack"
 
 [prune]
   go-tests = true
