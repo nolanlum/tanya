@@ -14,9 +14,10 @@
   version = "v1.2.0"
 
 [[projects]]
+  branch = "tanya"
   name = "github.com/nlopes/slack"
   packages = ["."]
-  revision = "3472fa2dd0347a0d966feaf49d3e197d50e9576e"
+  revision = "89cc0495a2457594f6d9d6af6663d94e2133d63e"
   source = "github.com/nolanlum/slack"
 
 [[projects]]

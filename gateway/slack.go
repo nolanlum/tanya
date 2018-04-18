@@ -472,7 +472,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						log.Println(err)
 						continue
 					}
-					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorId)
+					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorID)
 					if err != nil {
 						log.Println(err)
 						continue

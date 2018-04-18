@@ -327,6 +327,8 @@ func (rtm *RTM) handleRawEvent(rawEvent json.RawMessage) {
 		rtm.handleAck(rawEvent)
 	case "hello":
 		rtm.IncomingEvents <- RTMEvent{"hello", &HelloEvent{}}
+	case "goodbye":
+		rtm.killChannel <- false
 	case "pong":
 		rtm.handlePong(rawEvent)
 	case "desktop_notification":
