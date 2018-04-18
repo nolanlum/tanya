@@ -77,6 +77,44 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 	}
 }
 
+func TestSlackClient_ParseMessageTextWithOptions(t *testing.T) {
+	type fields struct {
+		channelInfo map[string]*SlackChannel
+		userInfo    map[string]*SlackUser
+	}
+	type params struct {
+		text                string
+		includeCanonicalURL bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		params params
+		want   string
+	}{
+		{
+			name:   "URL detected by slack",
+			fields: fields{},
+			params: params{
+				text:                "Fork this cool github repo <http://github.com/nolanlum/tanya|github.com/nolanlum/tanya> xD",
+				includeCanonicalURL: true,
+			},
+			want: "Fork this cool github repo github.com/nolanlum/tanya http://github.com/nolanlum/tanya xD",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := NewSlackClient()
+			sc.channelInfo = tt.fields.channelInfo
+			sc.userInfo = tt.fields.userInfo
+
+			if got := sc.ParseMessageTextWithOptions(tt.params.text, tt.params.includeCanonicalURL); got != tt.want {
+				t.Errorf("SlackClient.ParseMessageTextWithOptions() = \"%v\", want \"%v\"", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSlackClient_UnparseMessageText(t *testing.T) {
 	type fields struct {
 		channelInfo map[string]*SlackChannel
