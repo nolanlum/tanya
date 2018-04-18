@@ -72,139 +72,145 @@ func (cc *clientConnection) finishRegistration() {
 }
 
 func (cc *clientConnection) handleConnInput() {
-	defer func() {
-		close(cc.shutdown)
-		cc.conn.Close()
-	}()
+	defer cc.conn.Close()
 
 	s := bufio.NewScanner(cc.conn)
 
-ScanLoop:
-	for s.Scan() {
-		// Reads a line with s.Text() and parses it as
-		// an IRC message
-		msgStr := s.Text()
-		msg, err := StringToMessage(msgStr)
+SelectLoop:
+	for {
+		select {
+		case <-cc.shutdown:
+			return
 
-		// Pretty sure error handling shouldn't be this complicated
-		if err != nil {
-			if err == ErrMalformedIRCMessage {
-				log.Printf("[%v] sent malformed IRC message: %v", cc, msgStr)
-			} else if numeric, ok := err.(*NumericReply); ok {
-				fmt.Fprintln(cc.conn, cc.reply(*numeric).String())
-			} else {
-				log.Printf("[%v] error: %v", cc, err)
+		default:
+			if !s.Scan() {
+				close(cc.shutdown)
+				continue
 			}
-			continue
-		}
+			msgStr := s.Text()
+			msg, err := StringToMessage(msgStr)
 
-		switch msg.Cmd {
-		case PrivmsgCmd:
-			// Swallow the PRIVMSG if we haven't registered yet
-			if cc.state != clientStateRegistered {
+			// Pretty sure error handling shouldn't be this complicated
+			if err != nil {
+				if err == ErrMalformedIRCMessage {
+					log.Printf("[%v] sent malformed IRC message: %v", cc, msgStr)
+				} else if numeric, ok := err.(*NumericReply); ok {
+					fmt.Fprintln(cc.conn, cc.reply(*numeric).String())
+				} else {
+					log.Printf("[%v] error: %v", cc, err)
+				}
 				continue
 			}
 
-			cc.serverChan <- &ServerMessage{
-				message: ParseMessage(msg),
-				cAddr:   cc.conn.RemoteAddr(),
-			}
-		case NickCmd:
-			if cc.state == clientStateRegistering {
-				cc.clientUser.Nick = msg.Params[0]
-				cc.state = clientStateAwaitingUser
-			} else if cc.state == clientStateAwaitingNick {
-				// Finish registration if we already have the USER
-				cc.clientUser.Nick = msg.Params[0]
-				cc.state = clientStateRegistered
-				cc.finishRegistration()
-			} else {
-				cc.outgoingMessages <- (&Nick{
-					From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
-					NewNick: cc.serverUser.Nick,
-				}).ToMessage()
-			}
-
-		case UserCmd:
-			if cc.state == clientStateRegistering {
-				cc.state = clientStateAwaitingNick
-			} else if cc.state == clientStateAwaitingUser {
-				// Finish registration if we already have the NICK
-				cc.state = clientStateRegistered
-				cc.finishRegistration()
-			}
-
-		case PingCmd:
-			var pingToken string
-			if len(msg.Params) > 0 {
-				pingToken = msg.Params[0]
-			}
-
-			cc.outgoingMessages <- (&Pong{
-				ServerName: cc.config.ServerName,
-				Token:      pingToken,
-			}).ToMessage()
-
-		case JoinCmd:
-			channels := strings.Split(msg.Params[0], ",")
-
-			for _, channelName := range channels {
-				// Slack channel names are forcibly lowercased...RIP casemapping
-				channelName = strings.ToLower(channelName)
-
-				// Ignore if we've already joined this channel (to avoid sending WHO/NAMES again)
-				for _, joinedChannel := range cc.stateProvider.GetJoinedChannels() {
-					if channelName == joinedChannel {
-						continue ScanLoop
-					}
+			switch msg.Cmd {
+			case PrivmsgCmd:
+				// Swallow the PRIVMSG if we haven't registered yet
+				if cc.state != clientStateRegistered {
+					continue
 				}
 
-				// TODO make this actually join if we're not already a part of the channel
-				cc.handleChannelJoined(channelName)
+				cc.serverChan <- &ServerMessage{
+					message: ParseMessage(msg),
+					cAddr:   cc.conn.RemoteAddr(),
+				}
+			case NickCmd:
+				if cc.state == clientStateRegistering {
+					cc.clientUser.Nick = msg.Params[0]
+					cc.state = clientStateAwaitingUser
+				} else if cc.state == clientStateAwaitingNick {
+					// Finish registration if we already have the USER
+					cc.clientUser.Nick = msg.Params[0]
+					cc.state = clientStateRegistered
+					cc.finishRegistration()
+				} else {
+					cc.outgoingMessages <- (&Nick{
+						From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
+						NewNick: cc.serverUser.Nick,
+					}).ToMessage()
+				}
+
+			case UserCmd:
+				if cc.state == clientStateRegistering {
+					cc.state = clientStateAwaitingNick
+				} else if cc.state == clientStateAwaitingUser {
+					// Finish registration if we already have the NICK
+					cc.state = clientStateRegistered
+					cc.finishRegistration()
+				}
+
+			case PingCmd:
+				var pingToken string
+				if len(msg.Params) > 0 {
+					pingToken = msg.Params[0]
+				}
+
+				cc.outgoingMessages <- (&Pong{
+					ServerName: cc.config.ServerName,
+					Token:      pingToken,
+				}).ToMessage()
+
+			case JoinCmd:
+				channels := strings.Split(msg.Params[0], ",")
+
+				for _, channelName := range channels {
+					// Slack channel names are forcibly lowercased...RIP casemapping
+					channelName = strings.ToLower(channelName)
+
+					// Ignore if we've already joined this channel (to avoid sending WHO/NAMES again)
+					for _, joinedChannel := range cc.stateProvider.GetJoinedChannels() {
+						if channelName == joinedChannel {
+							continue SelectLoop
+						}
+					}
+
+					// TODO make this actually join if we're not already a part of the channel
+					cc.handleChannelJoined(channelName)
+				}
+
+			case PartCmd:
+				// TODO make this do more than just echo
+				msg.Prefix = cc.clientUser.String()
+				cc.outgoingMessages <- msg
+
+			case ModeCmd:
+				if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
+					// For Slack we only want to handle querying channel modes...
+					// And they'll always be just +nt
+					continue
+				}
+
+				cc.outgoingMessages <- cc.reply(NumericReply{
+					Code:   RPL_CHANNELMODEIS,
+					Params: []string{msg.Params[0], "+nt"},
+				})
+
+				ctime := cc.stateProvider.GetChannelCTime(msg.Params[0])
+				cc.outgoingMessages <- cc.reply(NumericReply{
+					Code:   RPL_CREATIONTIME,
+					Params: []string{msg.Params[0], fmt.Sprintf("%v", ctime.Unix())},
+				})
+
+			case TopicCmd:
+				// nolint: megacheck
+				if len(msg.Params) == 1 {
+					cc.sendChannelTopic(msg.Params[0])
+				} else {
+					// TODO implement setting the topic
+				}
+
+			case WhoCmd:
+				if len(msg.Params) < 1 {
+					// Technically this is allowed but we'll just ignore it.
+					continue
+				}
+
+				channelName := msg.Params[0]
+				users := cc.stateProvider.GetChannelUsers(channelName)
+				for _, m := range WholistAsNumerics(users, channelName, cc.config.ServerName) {
+					cc.outgoingMessages <- cc.reply(*m)
+				}
 			}
 
-		case PartCmd:
-			// TODO make this do more than just echo
-			msg.Prefix = cc.clientUser.String()
-			cc.outgoingMessages <- msg
-
-		case ModeCmd:
-			if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
-				// For Slack we only want to handle querying channel modes...
-				// And they'll always be just +nt
-				continue
-			}
-
-			cc.outgoingMessages <- cc.reply(NumericReply{
-				Code:   RPL_CHANNELMODEIS,
-				Params: []string{msg.Params[0], "+nt"},
-			})
-
-			ctime := cc.stateProvider.GetChannelCTime(msg.Params[0])
-			cc.outgoingMessages <- cc.reply(NumericReply{
-				Code:   RPL_CREATIONTIME,
-				Params: []string{msg.Params[0], fmt.Sprintf("%v", ctime.Unix())},
-			})
-
-		case TopicCmd:
-			// nolint: megacheck
-			if len(msg.Params) == 1 {
-				cc.sendChannelTopic(msg.Params[0])
-			} else {
-				// TODO implement setting the topic
-			}
-
-		case WhoCmd:
-			if len(msg.Params) < 1 {
-				// Technically this is allowed but we'll just ignore it.
-				continue
-			}
-
-			channelName := msg.Params[0]
-			users := cc.stateProvider.GetChannelUsers(channelName)
-			for _, m := range WholistAsNumerics(users, channelName, cc.config.ServerName) {
-				cc.outgoingMessages <- cc.reply(*m)
-			}
 		}
 	}
 }
