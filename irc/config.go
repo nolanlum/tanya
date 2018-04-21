@@ -11,5 +11,5 @@ type Config struct {
 // SetDefaults overwrites config entries with their default values
 func (c *Config) SetDefaults() {
 	c.ServerName = "tanya"
-	c.ListenAddr = ":6667"
+	c.ListenAddr = "0.0.0.0:6667"
 }

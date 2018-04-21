@@ -8,6 +8,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/nolanlum/tanya/irc"
 	"github.com/nolanlum/tanya/token"
+	"github.com/nolanlum/tanya/tracing"
 )
 
 type slack struct {
@@ -16,13 +17,17 @@ type slack struct {
 
 // Config holds configuration data for Tanya
 type Config struct {
-	Slack slack
-	IRC   irc.Config
+	Slack   slack
+	IRC     irc.Config
+	Tracing tracing.Config
 }
 
 // SetDefaults overwrites config entries with their default values
 func (c *Config) SetDefaults() {
 	c.IRC.SetDefaults()
+	c.Tracing.SetDefaults()
+
+	c.Tracing.ServiceHostPort = c.IRC.ListenAddr
 }
 
 // LoadConfig parses a config if it exists, or generates a new one

@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -9,6 +10,9 @@ import (
 	"time"
 
 	"github.com/nlopes/slack"
+	"github.com/nolanlum/tanya/tracing"
+	"github.com/openzipkin/zipkin-go"
+	"github.com/openzipkin/zipkin-go/model"
 )
 
 // SlackChannel holds data for a channel on Slack
@@ -59,6 +63,8 @@ type SlackClient struct {
 	rtm    *slack.RTM
 	self   *SlackUser
 
+	requester slack.HTTPRequester
+
 	channelInfo        map[string]*SlackChannel
 	userInfo           map[string]*SlackUser
 	dmInfo             map[string]*SlackUser
@@ -74,8 +80,10 @@ type SlackClient struct {
 }
 
 // NewSlackClient creates a new SlackClient with some default values
-func NewSlackClient() *SlackClient {
+func NewSlackClient(requester slack.HTTPRequester) *SlackClient {
 	return &SlackClient{
+		requester: requester,
+
 		channelInfo:        make(map[string]*SlackChannel),
 		userInfo:           make(map[string]*SlackUser),
 		channelMemberships: make(map[string]*SlackChannel),
@@ -281,7 +289,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 
 // GetChannelUsers queries the Slack API for a list of users in the given channel, returning
 // SlackUser objects for each one
-func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err error) {
+func (sc *SlackClient) GetChannelUsers(ctx context.Context, channelID string) (users []SlackUser, err error) {
 	hasMore := true
 	guicp := &slack.GetUsersInConversationParameters{
 		ChannelID: channelID,
@@ -289,7 +297,7 @@ func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err
 	}
 	for hasMore {
 		var userIDs []string
-		userIDs, guicp.Cursor, err = sc.client.GetUsersInConversation(guicp)
+		userIDs, guicp.Cursor, err = sc.client.GetUsersInConversationContext(ctx, guicp)
 		if err != nil {
 			return
 		}
@@ -331,7 +339,12 @@ type ClientChans struct {
 
 // Initialize bootstraps the SlackClient with a client token
 func (sc *SlackClient) Initialize(token string) {
-	sc.client = slack.New(token)
+	options := make([]slack.Option, 0)
+	if sc.requester != nil {
+		options = append(options, slack.OptionHTTPClient(sc.requester))
+	}
+
+	sc.client = slack.New(token, options...)
 	sc.rtm = sc.client.NewRTM()
 }
 
@@ -353,20 +366,21 @@ func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
 	return nil
 }
 
-func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
+func newSlackMessageEvent(ctx context.Context, from *SlackUser, target, message string) *SlackEvent {
 	return &SlackEvent{
 		EventType: MessageEvent,
+		Context:   ctx,
 		Data:      &MessageEventData{*from, target, message},
 	}
 }
 
-func (sc *SlackClient) newInternalMessageEvent(message string) *SlackEvent {
+func (sc *SlackClient) newInternalMessageEvent(ctx context.Context, message string) *SlackEvent {
 	to := tanyaInternalUser.Nick
 	if sc.self != nil {
 		to = sc.self.Nick
 	}
 
-	return newSlackMessageEvent(tanyaInternalUser, to, message)
+	return newSlackMessageEvent(ctx, tanyaInternalUser, to, message)
 }
 
 func isDmChannel(channelID string) bool {
@@ -385,6 +399,19 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 		default:
 			event := <-sc.rtm.IncomingEvents
+			span, ctx := tracing.GetTracer().StartSpanFromContext(
+				context.Background(),
+				"RTM/incoming",
+				zipkin.Kind(model.Consumer),
+				zipkin.RemoteEndpoint(&model.Endpoint{
+					ServiceName: "slack",
+					Port:        443,
+				}),
+				zipkin.Tags(map[string]string{
+					"event.type": event.Type,
+				}),
+			)
+
 			switch event.Type {
 			case "connection_error":
 				connEventError := event.Data.(*slack.ConnectionErrorEvent)
@@ -399,6 +426,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				chans.IncomingChan <- &SlackEvent{
 					EventType: SlackConnectedEvent,
+					Context:   ctx,
 					Data: &SlackConnectedEventData{
 						UserInfo: sc.self,
 					},
@@ -412,7 +440,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					var err error
 					if sender, err = sc.ResolveUser(messageData.User); err != nil {
 						log.Printf("could not resolve user for message [%v]: %+v", err, messageData)
-						continue
+						break
 					}
 				}
 
@@ -421,14 +449,14 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					if isDmChannel(messageData.Channel) {
 						if targetUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
 							log.Printf("could not resolve DM target for message [%v]: %+v", err, messageData)
-							continue
+							break
 						} else {
 							target = targetUser.Nick
 						}
 					} else {
 						if channel, err := sc.ResolveChannel(messageData.Channel); err != nil {
 							log.Printf("could not resolve channel for message [%v]: %+v", err, messageData)
-							continue
+							break
 						} else {
 							target = channel.Name
 						}
@@ -439,12 +467,12 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				case "file_mention":
 					if messageData.User == sc.self.SlackID {
 						// Eat the "helpful" messages Slack sends when you send a link to a Slack upload.
-						continue
+						break
 					}
 					fallthrough
 				case "", "file_share":
 					if sender == nil || target == "" {
-						continue
+						break
 					}
 
 					// Slack "abuses" the display/canonical URL feature of its markdown for file upload messages,
@@ -461,37 +489,38 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					for parsedMessage.Scan() {
 						messageLine := parsedMessage.Text()
 						if len(messageLine) > 0 {
-							chans.IncomingChan <- newSlackMessageEvent(sender, target, messageLine)
+							chans.IncomingChan <- newSlackMessageEvent(ctx, sender, target, messageLine)
 						}
 					}
 
 				case "message_changed":
 					if messageData.SubMessage == nil || messageData.SubMessage.SubType != "" {
-						chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%+v", messageData))
-						continue
+						chans.IncomingChan <- sc.newInternalMessageEvent(ctx, fmt.Sprintf("%+v", messageData))
+						break
 					}
 					subMessage := messageData.SubMessage
 
 					// For now, only handle the Slack native expansion of archive links
 					if !strings.Contains(subMessage.Text, "slack.com/archives") || len(subMessage.Attachments) < 1 {
-						continue
+						break
 					}
 
 					if target == "" {
-						continue
+						break
 					}
 
 					user, err := sc.ResolveUser(subMessage.User)
 					if err != nil {
 						log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
-						continue
+						break
 					}
 					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorID)
 					if err != nil {
 						log.Printf("could not resolve quoted user for archive link [%v]: %+v", err, messageData.SubMessage)
-						continue
+						break
 					}
 					chans.IncomingChan <- newSlackMessageEvent(
+						ctx,
 						user,
 						target,
 						fmt.Sprintf(
@@ -503,7 +532,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				case "channel_topic":
 					if sender == nil || target == "" {
-						continue
+						break
 					}
 
 					chans.IncomingChan <- &SlackEvent{
@@ -516,7 +545,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 
 				default:
-					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
+					chans.IncomingChan <- sc.newInternalMessageEvent(
+						ctx, fmt.Sprintf("%v: %+v", event.Type, event.Data))
 				}
 
 			case "user_change":
@@ -548,25 +578,26 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				file := fileSharedEvent.File
 				if len(file.Channels) == 0 {
 					log.Printf("file not shared to any channels: %+v\n", fileSharedEvent)
-					continue
+					break
 				}
 
 				target, err := sc.ResolveChannel(file.Channels[0])
 				if err != nil {
 					log.Println(err)
-					continue
+					break
 				}
 
 				user, err := sc.ResolveUser(file.User)
 				if err != nil {
 					log.Println(err)
-					continue
+					break
 				}
 
 				shareMessage := fmt.Sprintf(
 					"@%s shared a file: %s %s", user.Nick, file.Name, file.URLPrivateDownload,
 				)
-				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
+				chans.IncomingChan <- newSlackMessageEvent(
+					ctx, user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
 
 			case "channel_marked", "group_marked", "latency_report",
 				"user_typing", "pref_change", "dnd_updated_user",
@@ -576,13 +607,17 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "ack":
 				// maybe we care about this
 				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
-					continue
+					break
 				}
 				fallthrough
 
 			default:
-				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
+				chans.IncomingChan <- sc.newInternalMessageEvent(
+					ctx, fmt.Sprintf("%v: %+v", event.Type, event.Data))
 			}
+
+			span.Annotate(time.Now(), "Event Consumption Complete")
+			span.Finish()
 		}
 	}
 }

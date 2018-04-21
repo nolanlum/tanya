@@ -1,13 +1,14 @@
 package irc
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
 
 // Messagable is a type that can be converted to an IRC message
 type Messagable interface {
-	ToMessage() *Message
+	ToMessage(ctx context.Context) *Message
 }
 
 // User represents a user identified by a nick and an ident
@@ -38,11 +39,12 @@ type Privmsg struct {
 }
 
 // ToMessage turns a Privmsg into a Message
-func (p *Privmsg) ToMessage() *Message {
+func (p *Privmsg) ToMessage(ctx context.Context) *Message {
 	return &Message{
 		p.From.String(),
 		PrivmsgCmd,
 		[]string{p.Target, p.Message},
+		ctx,
 	}
 }
 
@@ -63,11 +65,12 @@ type Nick struct {
 }
 
 // ToMessage turns a Nick into a Message
-func (n *Nick) ToMessage() *Message {
+func (n *Nick) ToMessage(ctx context.Context) *Message {
 	return &Message{
 		n.From.String(),
 		NickCmd,
 		[]string{n.NewNick},
+		ctx,
 	}
 }
 
@@ -78,11 +81,12 @@ type Pong struct {
 }
 
 // ToMessage turns a Pong into a Message
-func (p *Pong) ToMessage() *Message {
+func (p *Pong) ToMessage(ctx context.Context) *Message {
 	return &Message{
 		p.ServerName,
 		PongCmd,
 		[]string{p.ServerName, p.Token},
+		ctx,
 	}
 }
 
@@ -93,11 +97,12 @@ type Join struct {
 }
 
 // ToMessage turns a Join into a Message
-func (j *Join) ToMessage() *Message {
+func (j *Join) ToMessage(ctx context.Context) *Message {
 	return &Message{
 		j.User.String(),
 		JoinCmd,
 		[]string{j.Channel},
+		ctx,
 	}
 }
 
@@ -109,11 +114,12 @@ type Topic struct {
 }
 
 // ToMessage turns a Topic into a Message
-func (t *Topic) ToMessage() *Message {
+func (t *Topic) ToMessage(ctx context.Context) *Message {
 	return &Message{
 		t.From.String(),
 		TopicCmd,
 		[]string{t.Channel, t.Topic},
+		ctx,
 	}
 }
 

@@ -2,10 +2,16 @@ package irc
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"strings"
+	"time"
+
+	"github.com/nolanlum/tanya/tracing"
+	"github.com/openzipkin/zipkin-go"
+	"github.com/openzipkin/zipkin-go/model"
 )
 
 type clientState int
@@ -59,16 +65,16 @@ func (cc *clientConnection) String() string {
 	return fmt.Sprintf("%v", cc.conn.RemoteAddr())
 }
 
-func (cc *clientConnection) finishRegistration() {
+func (cc *clientConnection) finishRegistration(ctx context.Context) {
 	// Set the client straight if its nick is wrong
 	if cc.clientUser.Nick != cc.serverUser.Nick {
 		cc.outgoingMessages <- (&Nick{
 			From:    User{Nick: cc.clientUser.Nick, Ident: cc.serverUser.Ident},
 			NewNick: cc.serverUser.Nick,
-		}).ToMessage()
+		}).ToMessage(ctx)
 	}
 	cc.clientUser = *cc.serverUser
-	cc.sendWelcome()
+	cc.sendWelcome(ctx)
 }
 
 func (cc *clientConnection) handleConnInput() {
@@ -78,6 +84,14 @@ func (cc *clientConnection) handleConnInput() {
 
 SelectLoop:
 	for {
+		var ctx context.Context
+		var span zipkin.Span
+		if span != nil {
+			span.Annotate(time.Now(), "Processing Complete")
+			span.Finish()
+			span = nil
+		}
+
 		select {
 		case <-cc.shutdown:
 			return
@@ -88,7 +102,14 @@ SelectLoop:
 				continue
 			}
 			msgStr := s.Text()
+			span, ctx = tracing.GetTracer().StartSpanFromContext(
+				context.Background(),
+				"IRC/incoming",
+				zipkin.Kind(model.Server),
+			)
+
 			msg, err := StringToMessage(msgStr)
+			span.Annotate(time.Now(), "Parsing Complete")
 
 			// Pretty sure error handling shouldn't be this complicated
 			if err != nil {
@@ -101,6 +122,8 @@ SelectLoop:
 				}
 				continue
 			}
+
+			span.Tag("irc.msg_type", cmdToStrMap[msg.Cmd])
 
 			switch msg.Cmd {
 			case PrivmsgCmd:
@@ -121,12 +144,12 @@ SelectLoop:
 					// Finish registration if we already have the USER
 					cc.clientUser.Nick = msg.Params[0]
 					cc.state = clientStateRegistered
-					cc.finishRegistration()
+					cc.finishRegistration(ctx)
 				} else {
 					cc.outgoingMessages <- (&Nick{
 						From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
 						NewNick: cc.serverUser.Nick,
-					}).ToMessage()
+					}).ToMessage(ctx)
 				}
 
 			case UserCmd:
@@ -135,7 +158,7 @@ SelectLoop:
 				} else if cc.state == clientStateAwaitingUser {
 					// Finish registration if we already have the NICK
 					cc.state = clientStateRegistered
-					cc.finishRegistration()
+					cc.finishRegistration(ctx)
 				}
 
 			case PingCmd:
@@ -147,7 +170,7 @@ SelectLoop:
 				cc.outgoingMessages <- (&Pong{
 					ServerName: cc.config.ServerName,
 					Token:      pingToken,
-				}).ToMessage()
+				}).ToMessage(ctx)
 
 			case JoinCmd:
 				channels := strings.Split(msg.Params[0], ",")
@@ -164,7 +187,7 @@ SelectLoop:
 					}
 
 					// TODO make this actually join if we're not already a part of the channel
-					cc.handleChannelJoined(channelName)
+					cc.handleChannelJoined(ctx, channelName)
 				}
 
 			case PartCmd:
@@ -193,7 +216,7 @@ SelectLoop:
 			case TopicCmd:
 				// nolint: megacheck
 				if len(msg.Params) == 1 {
-					cc.sendChannelTopic(msg.Params[0])
+					cc.sendChannelTopic(ctx, msg.Params[0])
 				} else {
 					// TODO implement setting the topic
 				}
@@ -205,7 +228,7 @@ SelectLoop:
 				}
 
 				channelName := msg.Params[0]
-				users := cc.stateProvider.GetChannelUsers(channelName)
+				users := cc.stateProvider.GetChannelUsers(ctx, channelName)
 				for _, m := range WholistAsNumerics(users, channelName, cc.config.ServerName) {
 					cc.outgoingMessages <- cc.reply(*m)
 				}
@@ -223,7 +246,19 @@ func (cc *clientConnection) handleConnOutput() {
 
 		case message := <-cc.outgoingMessages:
 			if cc.state == clientStateRegistered {
+				ctx := message.Context
+				if ctx == nil {
+					ctx = context.Background()
+				}
+
+				span, _ := tracing.GetTracer().StartSpanFromContext(
+					ctx,
+					"irc/send",
+					zipkin.Kind(model.Server),
+				)
 				fmt.Fprintln(cc.conn, message.String())
+				span.Annotate(time.Now(), "Send Complete")
+				span.Finish()
 			}
 		}
 	}
@@ -235,7 +270,7 @@ func (cc *clientConnection) reply(reply NumericReply) *Message {
 	return reply.ToMessage()
 }
 
-func (cc *clientConnection) sendWelcome() {
+func (cc *clientConnection) sendWelcome(ctx context.Context) {
 	messages := []*Message{
 		cc.reply(NumericReply{
 			Code:   RPL_WELCOME,
@@ -284,11 +319,11 @@ func (cc *clientConnection) sendWelcome() {
 	}
 
 	for _, channelName := range cc.stateProvider.GetJoinedChannels() {
-		cc.handleChannelJoined(channelName)
+		cc.handleChannelJoined(ctx, channelName)
 	}
 }
 
-func (cc *clientConnection) sendChannelTopic(channelName string) {
+func (cc *clientConnection) sendChannelTopic(ctx context.Context, channelName string) {
 	topic := cc.stateProvider.GetChannelTopic(channelName)
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
@@ -305,16 +340,16 @@ func (cc *clientConnection) sendChannelTopic(channelName string) {
 	})
 }
 
-func (cc *clientConnection) handleChannelJoined(channelName string) {
+func (cc *clientConnection) handleChannelJoined(ctx context.Context, channelName string) {
 	joinResponse := (&Join{
 		User:    cc.clientUser,
 		Channel: channelName,
-	}).ToMessage()
+	}).ToMessage(ctx)
 	cc.outgoingMessages <- joinResponse
 
-	cc.sendChannelTopic(channelName)
+	cc.sendChannelTopic(ctx, channelName)
 
-	users := cc.stateProvider.GetChannelUsers(channelName)
+	users := cc.stateProvider.GetChannelUsers(ctx, channelName)
 	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
 	}

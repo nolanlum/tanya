@@ -1,5 +1,7 @@
 package gateway
 
+import "context"
+
 // SlackEventType represents a variant of SlackEvent
 type SlackEventType int
 
@@ -17,6 +19,7 @@ const (
 // to any connected IRC clients
 type SlackEvent struct {
 	EventType SlackEventType
+	Context   context.Context
 	Data      interface{}
 }
 

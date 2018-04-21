@@ -13,7 +13,7 @@ func TestToMessage(t *testing.T) {
 		Message: msgStr,
 	}
 
-	m := p.ToMessage()
+	m := p.ToMessage(nil)
 
 	if m.Prefix != "poop!poopser@localhost" {
 		t.Error("Did not generate prefix corectly")
@@ -38,7 +38,7 @@ func TestToMessageEmptyPrefix(t *testing.T) {
 		Message: "hi im a poop",
 	}
 
-	m := p.ToMessage()
+	m := p.ToMessage(nil)
 
 	if m.Prefix != "" {
 		t.Error("Prefix is not empty when it should be")
@@ -65,6 +65,7 @@ func TestNick_ToMessage(t *testing.T) {
 				"",
 				NickCmd,
 				[]string{"czi"},
+				nil,
 			},
 		},
 		{
@@ -74,6 +75,7 @@ func TestNick_ToMessage(t *testing.T) {
 				"asid!acid@localhost",
 				NickCmd,
 				[]string{"czi"},
+				nil,
 			},
 		},
 	}
@@ -83,7 +85,7 @@ func TestNick_ToMessage(t *testing.T) {
 				From:    tt.fields.From,
 				NewNick: tt.fields.NewNick,
 			}
-			if got := n.ToMessage(); !reflect.DeepEqual(got, tt.want) {
+			if got := n.ToMessage(nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Nick.ToMessage() = \"%v\", want \"%v\"", got, tt.want)
 			}
 		})

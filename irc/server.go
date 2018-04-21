@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"context"
 	"log"
 	"net"
 	"strings"
@@ -131,7 +132,7 @@ func (s *Server) handleIncomingMessageRouting(incomingMessages <-chan *ServerMes
 			s.RLock()
 			for addr, conn := range s.clientConnections {
 				if addr != msg.cAddr {
-					conn.outgoingMessages <- msg.message.ToMessage()
+					conn.outgoingMessages <- msg.message.ToMessage(context.TODO())
 				}
 			}
 			s.RUnlock()
@@ -163,7 +164,7 @@ func (s *Server) HandleOutgoingMessageRouting(outgoingMessages <-chan *Message) 
 // freshly established Slack connection.
 //
 // Sets the IRC user info for the gateway user and informs clients.
-func (s *Server) HandleConnectBurst(selfUser User) {
+func (s *Server) HandleConnectBurst(ctx context.Context, selfUser User) {
 	oldSelfUser := s.selfUser
 	s.selfUser = selfUser
 
@@ -171,7 +172,7 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 		nickChangeMessage := (&Nick{
 			From:    oldSelfUser,
 			NewNick: selfUser.Nick,
-		}).ToMessage()
+		}).ToMessage(ctx)
 
 		s.RLock()
 		for _, v := range s.clientConnections {
@@ -184,7 +185,7 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 // ServerStateProvider contains methods used by the IRC server to answer
 // client queries about channels and their members.
 type ServerStateProvider interface {
-	GetChannelUsers(channelName string) []User
+	GetChannelUsers(ctx context.Context, channelName string) []User
 
 	GetChannelTopic(channelName string) ChannelTopic
 

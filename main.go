@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
+	"github.com/nolanlum/tanya/tracing"
 )
 
 func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
@@ -55,14 +57,14 @@ type corpusCallosum struct {
 }
 
 // GetChannelUsers implements irc.ServerStateProvider.GetChannelUsers
-func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
+func (c *corpusCallosum) GetChannelUsers(ctx context.Context, channelName string) []irc.User {
 	channel := c.sc.ResolveNameToChannel(channelName)
 	if channel == nil {
 		log.Printf("error while querying user list for %v: channel_not_found", channelName)
 		return nil
 	}
 
-	channelUsers, err := c.sc.GetChannelUsers(channel.SlackID)
+	channelUsers, err := c.sc.GetChannelUsers(ctx, channel.SlackID)
 	if err != nil {
 		log.Printf("error while querying user list for %v: %v", channelName, err)
 		return nil
@@ -161,16 +163,16 @@ Loop:
 				// server goroutine just for reconnected events, nor does it make sense
 				// to multiplex it onto sendChan.
 				b := msg.Data.(*gateway.SlackConnectedEventData)
-				server.HandleConnectBurst(slackUserToIRCUser(b.UserInfo))
+				server.HandleConnectBurst(msg.Context, slackUserToIRCUser(b.UserInfo))
 			case gateway.MessageEvent:
 				p := slackToPrivmsg(msg.Data.(*gateway.MessageEventData))
-				sendChan <- p.ToMessage()
+				sendChan <- p.ToMessage(msg.Context)
 			case gateway.NickChangeEvent:
 				n := slackToNick(msg.Data.(*gateway.NickChangeEventData))
-				sendChan <- n.ToMessage()
+				sendChan <- n.ToMessage(msg.Context)
 			case gateway.TopicChangeEvent:
 				t := slackToTopic(msg.Data.(*gateway.TopicChangeEventData))
-				sendChan <- t.ToMessage()
+				sendChan <- t.ToMessage(msg.Context)
 			}
 		}
 	}
@@ -191,8 +193,12 @@ func main() {
 	signal.Notify(killSignalChan, os.Interrupt)
 	log.Println("starting tanya")
 
+	// Configure tracing
+	tracing.Initialize(conf.Tracing)
+	defer tracing.Shutdown()
+
 	slackIncomingChan := make(chan *gateway.SlackEvent)
-	slackClient := gateway.NewSlackClient()
+	slackClient := gateway.NewSlackClient(tracing.GetHttpClient())
 	slackClient.Initialize(conf.Slack.Token)
 	if err != nil {
 		log.Fatal(err)

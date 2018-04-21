@@ -1,6 +1,7 @@
 package irc
 
 import (
+	"context"
 	"errors"
 	"strings"
 )
@@ -31,6 +32,8 @@ type Message struct {
 	Prefix string
 	Cmd    Command
 	Params []string
+
+	Context context.Context
 }
 
 var cmdToStrMap = map[Command]string{
@@ -129,38 +132,38 @@ func StringToMessage(str string) (*Message, error) {
 		if len(params) < 4 {
 			return nil, ErrNeedMoreParams("USER")
 		}
-		return &Message{prefix, UserCmd, params}, nil
+		return &Message{prefix, UserCmd, params, nil}, nil
 	case "NICK":
 		if len(params) < 1 {
 			return nil, ErrNeedMoreParams("NICK")
 		}
-		return &Message{prefix, NickCmd, params}, nil
+		return &Message{prefix, NickCmd, params, nil}, nil
 	case "PRIVMSG":
 		if len(params) < 1 {
 			return nil, ErrNeedMoreParams("PRIVMSG")
 		}
-		return &Message{prefix, PrivmsgCmd, params}, nil
+		return &Message{prefix, PrivmsgCmd, params, nil}, nil
 	case "JOIN":
 		if len(params) < 1 {
 			return nil, ErrNeedMoreParams("JOIN")
 		}
-		return &Message{prefix, JoinCmd, params}, nil
+		return &Message{prefix, JoinCmd, params, nil}, nil
 	case "PART":
 		if len(params) < 1 {
 			return nil, ErrNeedMoreParams("PART")
 		}
-		return &Message{prefix, PartCmd, params}, nil
+		return &Message{prefix, PartCmd, params, nil}, nil
 	case "MODE":
-		return &Message{prefix, ModeCmd, params}, nil
+		return &Message{prefix, ModeCmd, params, nil}, nil
 	case "TOPIC":
 		if len(params) < 1 {
 			return nil, ErrNeedMoreParams("TOPIC")
 		}
-		return &Message{prefix, TopicCmd, params}, nil
+		return &Message{prefix, TopicCmd, params, nil}, nil
 	case "WHO":
-		return &Message{prefix, WhoCmd, params}, nil
+		return &Message{prefix, WhoCmd, params, nil}, nil
 	case "PING":
-		return &Message{prefix, PingCmd, params}, nil
+		return &Message{prefix, PingCmd, params, nil}, nil
 	default:
 		return nil, ErrUnknownCommand(cmdStr)
 	}
