@@ -86,11 +86,6 @@ SelectLoop:
 	for {
 		var ctx context.Context
 		var span zipkin.Span
-		if span != nil {
-			span.Annotate(time.Now(), "Processing Complete")
-			span.Finish()
-			span = nil
-		}
 
 		select {
 		case <-cc.shutdown:
@@ -99,7 +94,7 @@ SelectLoop:
 		default:
 			if !s.Scan() {
 				close(cc.shutdown)
-				continue
+				break
 			}
 			msgStr := s.Text()
 			span, ctx = tracing.GetTracer().StartSpanFromContext(
@@ -120,7 +115,7 @@ SelectLoop:
 				} else {
 					log.Printf("[%v] error: %v", cc, err)
 				}
-				continue
+				break
 			}
 
 			span.Tag("irc.msg_type", cmdToStrMap[msg.Cmd])
@@ -129,7 +124,7 @@ SelectLoop:
 			case PrivmsgCmd:
 				// Swallow the PRIVMSG if we haven't registered yet
 				if cc.state != clientStateRegistered {
-					continue
+					break
 				}
 
 				cc.serverChan <- &ServerMessage{
@@ -199,7 +194,7 @@ SelectLoop:
 				if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
 					// For Slack we only want to handle querying channel modes...
 					// And they'll always be just +nt
-					continue
+					break
 				}
 
 				cc.outgoingMessages <- cc.reply(NumericReply{
@@ -224,7 +219,7 @@ SelectLoop:
 			case WhoCmd:
 				if len(msg.Params) < 1 {
 					// Technically this is allowed but we'll just ignore it.
-					continue
+					break
 				}
 
 				channelName := msg.Params[0]
@@ -233,7 +228,11 @@ SelectLoop:
 					cc.outgoingMessages <- cc.reply(*m)
 				}
 			}
+		}
 
+		if span != nil {
+			span.Annotate(time.Now(), "Processing Complete")
+			span.Finish()
 		}
 	}
 }
@@ -254,7 +253,6 @@ func (cc *clientConnection) handleConnOutput() {
 				span, _ := tracing.GetTracer().StartSpanFromContext(
 					ctx,
 					"irc/send",
-					zipkin.Kind(model.Server),
 				)
 				fmt.Fprintln(cc.conn, message.String())
 				span.Annotate(time.Now(), "Send Complete")
