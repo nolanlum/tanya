@@ -575,7 +575,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "member_left_channel":
 				memberLeftChannelEvent := event.Data.(*slack.MemberLeftChannelEvent)
-				partEvent, err := sc.handleMemberJoinedChannel(
+				partEvent, err := sc.handleMemberLeftChannel(
 					memberLeftChannelEvent.Channel, memberLeftChannelEvent.User)
 
 				if err != nil {
