@@ -2,4 +2,6 @@
 slack irc gateway in a world with no generics
 
 ## Running tanya
-Make sure your `$GOPATH` is in your `$PATH` and simply run `tanya`. Either fire your IRC client up against it (this doesn't work completely right now) or point netcat/telnet at port 6667: ex `nc localhost 6667`.
+Make sure your `$GOPATH\bin` is in your `$PATH` and simply run `tanya`. If you haven't created a configuration file yet, it will prompt you to log into Slack and automatically grab an API token. An IRC server will then start listening on `:6667` by default.
+
+Tanya will report unhandled events from the Slack RTM event stream via stderr, and select error and status messages are also sent to all connected IRC clients via the `*tanya` virtual user. (Patches welcome for unhandled RTM events.)
