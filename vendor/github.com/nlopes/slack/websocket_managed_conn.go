@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -292,6 +293,8 @@ func (rtm *RTM) receiveIncomingEvent() {
 	err := rtm.conn.ReadJSON(&event)
 	switch {
 	case err == io.ErrUnexpectedEOF:
+		fallthrough
+	case err != nil && strings.HasSuffix(err.Error(), "unexpected EOF"):
 		// EOF's don't seem to signify a failed connection so instead we ignore
 		// them here and detect a failed connection upon attempting to send a
 		// 'PING' message
@@ -328,7 +331,7 @@ func (rtm *RTM) handleRawEvent(rawEvent json.RawMessage) {
 	case "hello":
 		rtm.IncomingEvents <- RTMEvent{"hello", &HelloEvent{}}
 	case "goodbye":
-		rtm.killChannel <- false
+		rtm.IncomingEvents <- RTMEvent{"goodbye", &GoodbyeEvent{}}
 	case "pong":
 		rtm.handlePong(rawEvent)
 	case "desktop_notification":

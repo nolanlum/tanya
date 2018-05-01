@@ -63,6 +63,7 @@ type SlackClient struct {
 	userInfo           map[string]*SlackUser
 	dmInfo             map[string]*SlackUser
 	channelMemberships map[string]*SlackChannel
+	channelMembers     map[string]map[string]*SlackUser
 
 	nickToUserMap      map[string]string
 	channelNameToIDMap map[string]string
@@ -78,7 +79,9 @@ func NewSlackClient() *SlackClient {
 	return &SlackClient{
 		channelInfo:        make(map[string]*SlackChannel),
 		userInfo:           make(map[string]*SlackUser),
+		dmInfo:             make(map[string]*SlackUser),
 		channelMemberships: make(map[string]*SlackChannel),
+		channelMembers:     make(map[string]map[string]*SlackUser),
 
 		slackURLEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
 		slackURLDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
@@ -279,36 +282,6 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 	return nil, fmt.Errorf("could not find user for DM: %s", dmChannelID)
 }
 
-// GetChannelUsers queries the Slack API for a list of users in the given channel, returning
-// SlackUser objects for each one
-func (sc *SlackClient) GetChannelUsers(channelID string) (users []SlackUser, err error) {
-	hasMore := true
-	guicp := &slack.GetUsersInConversationParameters{
-		ChannelID: channelID,
-		Limit:     1000,
-	}
-	for hasMore {
-		var userIDs []string
-		userIDs, guicp.Cursor, err = sc.client.GetUsersInConversation(guicp)
-		if err != nil {
-			return
-		}
-
-		for _, userID := range userIDs {
-			var user *SlackUser
-			user, err = sc.ResolveUser(userID)
-			if err != nil {
-				return
-			}
-			users = append(users, *user)
-		}
-
-		hasMore = guicp.Cursor != ""
-	}
-
-	return
-}
-
 // GetChannelMemberships returns the channels this SlackClient is a member of
 func (sc *SlackClient) GetChannelMemberships() (channels []SlackChannel) {
 	sc.RLock()
@@ -390,6 +363,16 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				connEventError := event.Data.(*slack.ConnectionErrorEvent)
 				log.Printf("error connecting to slack: %v\n", connEventError.Error())
 
+			case "connecting":
+				connectingData := event.Data.(*slack.ConnectingEvent)
+
+				verb := "connecting"
+				if connectingData.ConnectionCount > 1 {
+					verb = "reconnecting"
+				}
+				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf(
+					"%s to slack (attempt %d)", verb, connectingData.Attempt))
+
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
 				sc.bootstrapMappings()
@@ -403,6 +386,13 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						UserInfo: sc.self,
 					},
 				}
+
+			case "hello":
+				chans.IncomingChan <- sc.newInternalMessageEvent("connected to slack!")
+
+			case "disconnected":
+				log.Println("tanya disconnected from slack")
+				chans.IncomingChan <- sc.newInternalMessageEvent("disconnected from slack!")
 
 			case "message":
 				messageData := event.Data.(*slack.MessageEvent)
@@ -467,7 +457,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				case "message_changed":
 					if messageData.SubMessage == nil || messageData.SubMessage.SubType != "" {
-						chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%+v", messageData))
+						log.Printf("message_changed with unexpected or missing submessage: %+v", messageData)
 						continue
 					}
 					subMessage := messageData.SubMessage
@@ -515,8 +505,12 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						},
 					}
 
+				case "channel_leave", "channel_join":
+					// These are already handled elsewhere, drop the message event.
+					continue
+
 				default:
-					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
+					log.Printf("unhandled submessage type [%v]: %+v", messageData.SubType, event.Data)
 				}
 
 			case "user_change":
@@ -547,7 +541,6 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				fileSharedEvent := event.Data.(*slack.FileSharedEvent)
 				file := fileSharedEvent.File
 				if len(file.Channels) == 0 {
-					log.Printf("file not shared to any channels: %+v\n", fileSharedEvent)
 					continue
 				}
 
@@ -568,9 +561,33 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				)
 				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
 
-			case "channel_marked", "group_marked", "latency_report",
-				"user_typing", "pref_change", "dnd_updated_user",
-				"file_public":
+			case "member_joined_channel":
+				memberJoinedChannelEvent := event.Data.(*slack.MemberJoinedChannelEvent)
+				joinEvent, err := sc.handleMemberJoinedChannel(
+					memberJoinedChannelEvent.Channel, memberJoinedChannelEvent.User)
+
+				if err != nil {
+					joinEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling member_joined_channel event [%v]: %+v", err, memberJoinedChannelEvent))
+				}
+
+				chans.IncomingChan <- joinEvent
+
+			case "member_left_channel":
+				memberLeftChannelEvent := event.Data.(*slack.MemberLeftChannelEvent)
+				partEvent, err := sc.handleMemberLeftChannel(
+					memberLeftChannelEvent.Channel, memberLeftChannelEvent.User)
+
+				if err != nil {
+					partEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling member_left_channel event [%v]: %+v", err, memberLeftChannelEvent))
+				}
+
+				chans.IncomingChan <- partEvent
+
+			case "channel_marked", "group_marked", "thread_marked", "im_marked",
+				"latency_report", "user_typing", "pref_change", "dnd_updated_user",
+				"file_public", "reaction_added":
 				// haha nobody cares about this
 
 			case "ack":
@@ -581,7 +598,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				fallthrough
 
 			default:
-				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf("%v: %+v", event.Type, event.Data))
+				log.Printf("unhandled event [%v]: %+v", event.Type, event.Data)
 			}
 		}
 	}

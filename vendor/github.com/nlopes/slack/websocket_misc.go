@@ -41,6 +41,9 @@ type RTMEvent struct {
 // HelloEvent represents the hello event
 type HelloEvent struct{}
 
+// GoodbyeEvent represents the goodbye event
+type GoodbyeEvent struct{}
+
 // PresenceChangeEvent represents the presence change event
 type PresenceChangeEvent struct {
 	Type     string `json:"type"`

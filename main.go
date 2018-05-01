@@ -49,6 +49,21 @@ func slackToTopic(t *gateway.TopicChangeEventData) *irc.Topic {
 	}
 }
 
+func slackToJoin(j *gateway.JoinPartEventData) *irc.Join {
+	return &irc.Join{
+		User:    slackUserToIRCUser(&j.User),
+		Channel: j.Target,
+	}
+}
+
+func slackToPart(j *gateway.JoinPartEventData) *irc.Part {
+	return &irc.Part{
+		User:    slackUserToIRCUser(&j.User),
+		Channel: j.Target,
+		Message: "Leaving",
+	}
+}
+
 // this name specially chosen to trigger ATRAN
 type corpusCallosum struct {
 	sc *gateway.SlackClient
@@ -171,6 +186,12 @@ Loop:
 			case gateway.TopicChangeEvent:
 				t := slackToTopic(msg.Data.(*gateway.TopicChangeEventData))
 				sendChan <- t.ToMessage()
+			case gateway.JoinEvent:
+				j := slackToJoin(msg.Data.(*gateway.JoinPartEventData))
+				sendChan <- j.ToMessage()
+			case gateway.PartEvent:
+				p := slackToPart(msg.Data.(*gateway.JoinPartEventData))
+				sendChan <- p.ToMessage()
 			}
 		}
 	}

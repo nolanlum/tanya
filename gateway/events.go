@@ -46,3 +46,9 @@ type TopicChangeEventData struct {
 	Target   string
 	NewTopic string
 }
+
+// JoinPartEventData represents a user joining or leaving a channel
+type JoinPartEventData struct {
+	User   SlackUser
+	Target string
+}

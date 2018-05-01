@@ -101,6 +101,22 @@ func (j *Join) ToMessage() *Message {
 	}
 }
 
+// Part is a PART message
+type Part struct {
+	User    User
+	Channel string
+	Message string
+}
+
+// ToMessage turns a Join into a Message
+func (j *Part) ToMessage() *Message {
+	return &Message{
+		j.User.String(),
+		PartCmd,
+		[]string{j.Channel, j.Message},
+	}
+}
+
 // Topic is a TOPIC message
 type Topic struct {
 	From    User
