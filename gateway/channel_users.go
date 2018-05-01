@@ -62,7 +62,7 @@ func (sc *SlackClient) bootstrapChannelUserList() {
 	}
 	wg.Wait()
 
-	log.Printf("slack:init channel_userlists:%v time:%v", len(sc.channelMembers), time.Now().Sub(startTime))
+	log.Printf("slack:init channel_userlists:%v time:%v", len(sc.channelMembers), time.Since(startTime))
 }
 
 // GetChannelUsers returns a locally cached list of users in the given channel

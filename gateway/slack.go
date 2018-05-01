@@ -151,7 +151,7 @@ func (sc *SlackClient) bootstrapMappings() {
 	sc.regenerateReverseMappings()
 
 	log.Printf("slack:init channels:%v users:%v dms:%v memberships:%v time:%v",
-		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Now().Sub(startTime))
+		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Since(startTime))
 }
 
 // Regenerate the cached reverse nick/channel name mappings
