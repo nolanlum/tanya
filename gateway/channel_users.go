@@ -1,6 +1,12 @@
 package gateway
 
-import "github.com/nlopes/slack"
+import (
+	"log"
+	"sync"
+	"time"
+
+	"github.com/nlopes/slack"
+)
 
 // getChannelUsersFromAPI queries the Slack API for a list of users in the given channel, returning
 // SlackUser objects for each one
@@ -30,6 +36,33 @@ func (sc *SlackClient) getChannelUsersFromAPI(channelID string) (users []*SlackU
 	}
 
 	return
+}
+
+// bootstrapChannelUserList fetches user lists for all channels the SlackClient is a member of
+func (sc *SlackClient) bootstrapChannelUserList() {
+	var wg sync.WaitGroup
+	var channelIDs []string
+	startTime := time.Now()
+
+	sc.RLock()
+	for channelID := range sc.channelMemberships {
+		channelIDs = append(channelIDs, channelID)
+	}
+	sc.RUnlock()
+
+	wg.Add(len(channelIDs))
+	for _, channelID := range channelIDs {
+		channelID := channelID
+		go func() {
+			if _, err := sc.GetChannelUsers(channelID); err != nil {
+				log.Printf("error while bootstrapping user list for %v: %v", channelID, err)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	log.Printf("slack:init channel_userlists:%v time:%v", len(sc.channelMembers), time.Now().Sub(startTime))
 }
 
 // GetChannelUsers returns a locally cached list of users in the given channel

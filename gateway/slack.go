@@ -88,8 +88,11 @@ func NewSlackClient() *SlackClient {
 	}
 }
 
-// Make the initial Slack calls to bootstrap our connection
+// Clear all stored state and reload workspace/conversation metadata from Slack.
+// Called upon reconnection to ensure all cached state is up-to-date.
 func (sc *SlackClient) bootstrapMappings() {
+	startTime := time.Now()
+
 	channelInfo := make(map[string]*SlackChannel)
 	userInfo := make(map[string]*SlackUser)
 	dmInfo := make(map[string]*SlackUser)
@@ -142,9 +145,13 @@ func (sc *SlackClient) bootstrapMappings() {
 	sc.userInfo = userInfo
 	sc.dmInfo = dmInfo
 	sc.channelMemberships = channelMemberships
+	sc.channelMembers = make(map[string]map[string]*SlackUser)
 	sc.Unlock()
 
 	sc.regenerateReverseMappings()
+
+	log.Printf("slack:init channels:%v users:%v dms:%v memberships:%v time:%v",
+		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Now().Sub(startTime))
 }
 
 // Regenerate the cached reverse nick/channel name mappings
@@ -376,6 +383,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
 				sc.bootstrapMappings()
+				go sc.bootstrapChannelUserList()
 				sc.self = sc.userInfo[connectedData.Info.User.ID]
 
 				log.Printf("tanya connected to slack as %v\n", sc.self)
@@ -456,11 +464,12 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					}
 
 				case "message_changed":
-					if messageData.SubMessage == nil || messageData.SubMessage.SubType != "" {
-						log.Printf("message_changed with unexpected or missing submessage: %+v", messageData)
+					subMessage := messageData.SubMessage
+					if subMessage == nil || subMessage.SubType != "" {
+						log.Printf("message_changed with unexpected or missing submessage: %+v SubMessage:%+v",
+							messageData, messageData.SubMessage)
 						continue
 					}
-					subMessage := messageData.SubMessage
 
 					// For now, only handle the Slack native expansion of archive links
 					if !strings.Contains(subMessage.Text, "slack.com/archives") || len(subMessage.Attachments) < 1 {
@@ -510,7 +519,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 					continue
 
 				default:
-					log.Printf("unhandled submessage type [%v]: %+v", messageData.SubType, event.Data)
+					log.Printf("unhandled submessage type [%v]: %+v SubMessage:%+v",
+						messageData.SubType, event.Data, messageData.SubMessage)
 				}
 
 			case "user_change":
