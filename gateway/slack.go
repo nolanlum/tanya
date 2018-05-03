@@ -415,12 +415,21 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				}
 
 				var target string
+				targetSwap := false
 				if messageData.Channel != "" {
 					if isDmChannel(messageData.Channel) {
 						if targetUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
 							log.Printf("could not resolve DM target for message [%v]: %+v", err, messageData)
 							continue
 						} else {
+							// If we sent this DM, then the sender and target need to be swapped
+							// because IRC clients can't display DMs done by others on your behalf
+							if sender == sc.self {
+								tempSender := sender
+								sender = targetUser
+								targetUser = tempSender
+								targetSwap = true
+							}
 							target = targetUser.Nick
 						}
 					} else {
@@ -454,6 +463,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						for _, attachment := range messageData.Attachments {
 							messageText = messageText + sc.slackURLDecoder.Replace(attachment.Fallback) + "\n"
 						}
+					}
+					// If we had swapped targets earlier, make sure the message reflects this swap
+					if targetSwap {
+						messageText = "[" + sc.self.Nick + "] " + messageText
 					}
 					parsedMessage := bufio.NewScanner(strings.NewReader(messageText))
 					for parsedMessage.Scan() {
