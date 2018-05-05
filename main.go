@@ -157,6 +157,14 @@ func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 	}
 }
 
+func (c *corpusCallosum) GetUserFromNick(nick string) irc.User {
+	slackUser := c.sc.ResolveNickToUser(nick)
+	if slackUser != nil {
+		return slackUserToIRCUser(slackUser)
+	}
+	return irc.User{}
+}
+
 func writeMessageLoop(
 	recvChan <-chan *gateway.SlackEvent,
 	sendChan chan<- *irc.Message,

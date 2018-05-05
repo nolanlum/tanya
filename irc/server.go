@@ -193,4 +193,6 @@ type ServerStateProvider interface {
 	GetJoinedChannels() []string
 
 	SendPrivmsg(privMsg *Privmsg)
+
+	GetUserFromNick(nick string) User
 }
