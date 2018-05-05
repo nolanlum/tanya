@@ -109,9 +109,13 @@ SelectLoop:
 					continue
 				}
 
-				cc.serverChan <- &ServerMessage{
-					message: ParseMessage(msg),
-					cAddr:   cc.conn.RemoteAddr(),
+				messagable, err := ParseMessage(msg)
+				if err == nil {
+					cc.serverChan <- &ServerMessage{
+						message: messagable,
+						cAddr:   cc.conn.RemoteAddr(),
+					}
+
 				}
 			case NickCmd:
 				if cc.state == clientStateRegistering {
@@ -215,6 +219,45 @@ SelectLoop:
 	}
 }
 
+// postProcessClientMessage modifies the message for consumption by the client
+// adding targets or swapping things as needed
+func (cc *clientConnection) postProcessClientMessage(m *Message) *Message {
+	messagable, err := ParseMessage(m)
+	if err != nil {
+		return m
+	}
+
+	switch aMessagable := messagable.(type) {
+	case *Privmsg:
+		// We need to change a few fields if this message is a self message
+		if aMessagable.IsFromSelf() {
+			// If this was for a channel message, then we need to add
+			// the self user as the From field
+			if aMessagable.IsTargetChannel() {
+				retMessage := aMessagable
+				retMessage.From = cc.clientUser
+				return retMessage.ToMessage()
+			}
+
+			// If not, this is a direct message, in which case we need to set
+			// the From to the target user, set the target to the self user
+			// and add text indicating that we were the original sender
+			retMessage := aMessagable
+			targetNick := aMessagable.Target
+			targetUser := cc.stateProvider.GetUserFromNick(targetNick)
+
+			retMessage.From = targetUser
+			retMessage.Target = cc.clientUser.Nick
+			retMessage.Message = "[" + cc.clientUser.Nick + "] " + retMessage.Message
+			return retMessage.ToMessage()
+		}
+	default:
+		return m
+	}
+
+	return m
+}
+
 func (cc *clientConnection) handleConnOutput() {
 	for {
 		select {
@@ -223,7 +266,7 @@ func (cc *clientConnection) handleConnOutput() {
 
 		case message := <-cc.outgoingMessages:
 			if cc.state == clientStateRegistered {
-				fmt.Fprintln(cc.conn, message.String())
+				fmt.Fprintln(cc.conn, cc.postProcessClientMessage(message).String())
 			}
 		}
 	}

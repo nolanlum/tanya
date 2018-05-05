@@ -56,6 +56,12 @@ func (p *Privmsg) IsValidTarget() bool {
 	return len(p.Target) > 0
 }
 
+// IsFromSelf returns whether the private message originated from self
+func (p *Privmsg) IsFromSelf() bool {
+	// if the from user is empty, then this is a self privmsg
+	return p.From == User{}
+}
+
 // Nick represents a IRC user nick change event
 type Nick struct {
 	From    User
@@ -162,7 +168,7 @@ func ParseUserString(s string) User {
 }
 
 // ParseMessage parses an IRC Message into a higher-level IRC type
-func ParseMessage(m *Message) Messagable {
+func ParseMessage(m *Message) (Messagable, error) {
 	switch m.Cmd {
 	case PrivmsgCmd:
 		var target string
@@ -178,8 +184,8 @@ func ParseMessage(m *Message) Messagable {
 			From:    ParseUserString(m.Prefix),
 			Target:  target,
 			Message: msg,
-		}
+		}, nil
 	default:
-		return &Privmsg{}
+		return &Privmsg{}, fmt.Errorf("could not parse message")
 	}
 }
