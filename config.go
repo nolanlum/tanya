@@ -26,10 +26,10 @@ func (c *Config) SetDefaults() {
 }
 
 // LoadConfig parses a config if it exists, or generates a new one
-func LoadConfig() (*Config, error) {
-	tomlData, err := ioutil.ReadFile("config.toml")
+func LoadConfig(configPath string, disableConfigGen bool) (*Config, error) {
+	tomlData, err := ioutil.ReadFile(configPath)
 
-	if os.IsNotExist(err) {
+	if !disableConfigGen && os.IsNotExist(err) {
 		fmt.Println("config.toml does not exist, generating one...")
 		return initializeConfig()
 	} else if err != nil {
