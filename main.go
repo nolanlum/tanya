@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -10,6 +11,9 @@ import (
 	"github.com/nolanlum/tanya/gateway"
 	"github.com/nolanlum/tanya/irc"
 )
+
+var configPathFlag = flag.String("config", "config.toml", "path to config file")
+var noGenFlag = flag.Bool("no-generate", false, "disables auto-generation of config files")
 
 func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	<-sigChan
@@ -206,7 +210,9 @@ Loop:
 }
 
 func main() {
-	conf, err := LoadConfig()
+	flag.Parse()
+
+	conf, err := LoadConfig(*configPathFlag, *noGenFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
