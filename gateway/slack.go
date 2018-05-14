@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -318,6 +317,7 @@ func (sc *SlackClient) Initialize(token string, debug bool) {
 	if debug {
 		slack.SetLogger(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile))
 		sc.client.SetDebug(true)
+		sc.rtm.SetDebug(true)
 	}
 }
 
@@ -410,137 +410,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "message":
 				messageData := event.Data.(*slack.MessageEvent)
-
-				var sender *SlackUser
-				if messageData.User != "" {
-					var err error
-					if sender, err = sc.ResolveUser(messageData.User); err != nil {
-						log.Printf("could not resolve user for message [%v]: %+v", err, messageData)
-						continue
-					}
-				}
-
-				var target string
-				targetSwap := false
-				if messageData.Channel != "" {
-					if isDmChannel(messageData.Channel) {
-						if targetUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
-							log.Printf("could not resolve DM target for message [%v]: %+v", err, messageData)
-							continue
-						} else {
-							// If we sent this DM, then the sender and target need to be swapped
-							// because IRC clients can't display DMs done by others on your behalf
-							if sender == sc.self {
-								tempSender := sender
-								sender = targetUser
-								targetUser = tempSender
-								targetSwap = true
-							}
-							target = targetUser.Nick
-						}
-					} else {
-						if channel, err := sc.ResolveChannel(messageData.Channel); err != nil {
-							log.Printf("could not resolve channel for message [%v]: %+v", err, messageData)
-							continue
-						} else {
-							target = channel.Name
-						}
-					}
-				}
-
-				switch messageData.SubType {
-				case "file_mention":
-					if messageData.User == sc.self.SlackID {
-						// Eat the "helpful" messages Slack sends when you send a link to a Slack upload.
-						continue
-					}
-					fallthrough
-				case "", "file_share":
-					if sender == nil || target == "" {
-						continue
-					}
-
-					// Slack "abuses" the display/canonical URL feature of its markdown for file upload messages,
-					// so we'll keep them if we got here through any other case but the normal message subtype.
-					preserveSlackCanonicalizedURL := messageData.SubType != ""
-					messageText := sc.ParseMessageTextWithOptions(messageData.Text, preserveSlackCanonicalizedURL)
-					if messageText == "" {
-						// Maybe we have an attachment instead.
-						for _, attachment := range messageData.Attachments {
-							messageText = messageText + sc.slackURLDecoder.Replace(attachment.Fallback) + "\n"
-						}
-					}
-					// If we had swapped targets earlier, make sure the message reflects this swap
-					if targetSwap {
-						messageText = "[" + sc.self.Nick + "] " + messageText
-					}
-					parsedMessage := bufio.NewScanner(strings.NewReader(messageText))
-					for parsedMessage.Scan() {
-						messageLine := parsedMessage.Text()
-						if len(messageLine) > 0 {
-							chans.IncomingChan <- newSlackMessageEvent(sender, target, messageLine)
-						}
-					}
-
-				case "message_changed":
-					subMessage := messageData.SubMessage
-					if subMessage == nil || subMessage.SubType != "" {
-						log.Printf("message_changed with unexpected or missing submessage: %+v SubMessage:%+v",
-							messageData, messageData.SubMessage)
-						continue
-					}
-
-					// For now, only handle the Slack native expansion of archive links
-					if !strings.Contains(subMessage.Text, "slack.com/archives") || len(subMessage.Attachments) < 1 {
-						continue
-					}
-
-					if target == "" {
-						continue
-					}
-
-					user, err := sc.ResolveUser(subMessage.User)
-					if err != nil {
-						log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
-						continue
-					}
-					quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorID)
-					if err != nil {
-						log.Printf("could not resolve quoted user for archive link [%v]: %+v", err, messageData.SubMessage)
-						continue
-					}
-					chans.IncomingChan <- newSlackMessageEvent(
-						user,
-						target,
-						fmt.Sprintf(
-							"<%s> %s",
-							quotedUser.Nick,
-							sc.ParseMessageText(subMessage.Attachments[0].Text),
-						),
-					)
-
-				case "channel_topic":
-					if sender == nil || target == "" {
-						continue
-					}
-
-					chans.IncomingChan <- &SlackEvent{
-						EventType: TopicChangeEvent,
-						Data: &TopicChangeEventData{
-							From:     *sender,
-							Target:   target,
-							NewTopic: messageData.Topic,
-						},
-					}
-
-				case "channel_leave", "channel_join":
-					// These are already handled elsewhere, drop the message event.
-					continue
-
-				default:
-					log.Printf("unhandled submessage type [%v]: %+v SubMessage:%+v",
-						messageData.SubType, event.Data, messageData.SubMessage)
-				}
+				sc.handleMessageEvent(chans.IncomingChan, messageData)
 
 			case "user_change":
 				userData := event.Data.(*slack.UserChangeEvent)
@@ -616,7 +486,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "channel_marked", "group_marked", "thread_marked", "im_marked",
 				"latency_report", "user_typing", "pref_change", "dnd_updated_user",
-				"file_public", "reaction_added":
+				"file_created", "file_public",
+				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
 				// haha nobody cares about this
 
 			case "ack":
