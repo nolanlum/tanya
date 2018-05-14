@@ -16,13 +16,25 @@ type slack struct {
 
 // Config holds configuration data for Tanya
 type Config struct {
+	Gateway []GatewayInstance
+}
+
+// SetDefaults overwrites config entries with their default values
+func (c *Config) SetDefaults() {
+	for i := range c.Gateway {
+		c.Gateway[i].SetDefaults()
+	}
+}
+
+// GatewayInstance holds configuration data for a single IRC<->Slack bridge instance
+type GatewayInstance struct {
 	Slack slack
 	IRC   irc.Config
 }
 
 // SetDefaults overwrites config entries with their default values
-func (c *Config) SetDefaults() {
-	c.IRC.SetDefaults()
+func (g *GatewayInstance) SetDefaults() {
+	g.IRC.SetDefaults()
 }
 
 // LoadConfig parses a config if it exists, or generates a new one
@@ -48,7 +60,7 @@ func initializeConfig() (*Config, error) {
 		return nil, err
 	}
 
-	conf.Slack.Token = slackToken
+	conf.Gateway = []GatewayInstance{{Slack: slack{Token: slackToken}}}
 
 	fmt.Print("Writing config.toml...")
 	f, err := os.Create("config.toml")
@@ -66,6 +78,13 @@ func initializeConfig() (*Config, error) {
 // parseConfig reads a toml string and returns a parsed config
 func parseConfig(tomlData string) (*Config, error) {
 	var conf Config
+
+	// Parse the config once to populate list fields
+	if _, err := toml.Decode(tomlData, &conf); err != nil {
+		return nil, err
+	}
+
+	// Re-parse the config to make sure defaults for each GatewayInstance are set
 	conf.SetDefaults()
 	if _, err := toml.Decode(tomlData, &conf); err != nil {
 		return nil, err

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/nolanlum/tanya/gateway"
@@ -18,7 +19,7 @@ var debugFlag = flag.Bool("debug", false, "toggles Slack library debug mode (log
 
 func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	<-sigChan
-	log.Println("stopping connections and goroutines")
+	log.Println("tanya shutting down, stopping connections and goroutines")
 	close(stopChan)
 }
 
@@ -210,6 +211,25 @@ Loop:
 	}
 }
 
+func launchGateway(conf *GatewayInstance, stopChan chan interface{}) {
+	slackIncomingChan := make(chan *gateway.SlackEvent)
+	slackClient := gateway.NewSlackClient()
+	slackClient.Initialize(conf.Slack.Token, *debugFlag)
+
+	go slackClient.Poop(&gateway.ClientChans{
+		IncomingChan: slackIncomingChan,
+		StopChan:     stopChan,
+	})
+
+	ircOutgoingChan := make(chan *irc.Message)
+	ircStateProvider := &corpusCallosum{slackClient}
+	ircServer := irc.NewServer(&conf.IRC, stopChan, ircStateProvider)
+	go ircServer.Listen()
+	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
+
+	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan, ircServer)
+}
+
 func main() {
 	flag.Parse()
 
@@ -227,24 +247,15 @@ func main() {
 	signal.Notify(killSignalChan, os.Interrupt)
 	log.Println("starting tanya")
 
-	slackIncomingChan := make(chan *gateway.SlackEvent)
-	slackClient := gateway.NewSlackClient()
-	slackClient.Initialize(conf.Slack.Token, *debugFlag)
-	if err != nil {
-		log.Fatal(err)
+	var wg sync.WaitGroup
+	wg.Add(len(conf.Gateway))
+	for _, g := range conf.Gateway {
+		go func(g GatewayInstance) {
+			launchGateway(&g, stopChan)
+			wg.Done()
+		}(g)
 	}
-	go slackClient.Poop(&gateway.ClientChans{
-		IncomingChan: slackIncomingChan,
-		StopChan:     stopChan,
-	})
 
-	ircOutgoingChan := make(chan *irc.Message)
-	ircStateProvider := &corpusCallosum{slackClient}
-	ircServer := irc.NewServer(&conf.IRC, stopChan, ircStateProvider)
-	go ircServer.Listen()
-	go ircServer.HandleOutgoingMessageRouting(ircOutgoingChan)
-
-	log.Println("tanya ready for connections")
-	writeMessageLoop(slackIncomingChan, ircOutgoingChan, stopChan, ircServer)
-	log.Println("tanya shutting down")
+	wg.Wait()
+	log.Println("goodbye!")
 }
