@@ -1,18 +1,22 @@
 # config.toml example
+[[gateway]]
 
-[irc]
+    [gateway.irc]
+    # Listen address
+    ListenAddr = ":6667"
 
-# Listen address
-ListenAddr = ":6667"
+    # Message of the Day
+    MOTD = """
+    haha !sux sonzai x"""
 
-# Message of the Day
-MOTD = """
-haha !sux sonzai x"""
+    [gateway.slack]
+    # Slack client token
+    token = ""
 
-[slack]
+# Multiple gateway sections can be specified for multiple workspaces
+[[gateway]]
+    [gateway.irc]
+    ListenAddr = ":6668"
 
-# Slack client token
-token = ""
-
-# Slack user ID
-userID = ""
+    [gateway.slack]
+    token = ""
