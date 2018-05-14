@@ -16,13 +16,13 @@ type slack struct {
 
 // Config holds configuration data for Tanya
 type Config struct {
-	Gateway []*GatewayInstance
+	Gateway []GatewayInstance
 }
 
 // SetDefaults overwrites config entries with their default values
 func (c *Config) SetDefaults() {
-	for _, g := range c.Gateway {
-		g.SetDefaults()
+	for i := range c.Gateway {
+		c.Gateway[i].SetDefaults()
 	}
 }
 
@@ -60,7 +60,7 @@ func initializeConfig() (*Config, error) {
 		return nil, err
 	}
 
-	conf.Gateway = []*GatewayInstance{{Slack: slack{Token: slackToken}}}
+	conf.Gateway = []GatewayInstance{{Slack: slack{Token: slackToken}}}
 
 	fmt.Print("Writing config.toml...")
 	f, err := os.Create("config.toml")

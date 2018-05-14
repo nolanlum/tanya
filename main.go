@@ -250,8 +250,8 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(len(conf.Gateway))
 	for _, g := range conf.Gateway {
-		go func(g *GatewayInstance) {
-			launchGateway(g, stopChan)
+		go func(g GatewayInstance) {
+			launchGateway(&g, stopChan)
 			wg.Done()
 		}(g)
 	}
