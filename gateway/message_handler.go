@@ -44,21 +44,22 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			// If we sent this DM, then the sender needs to be faked to the other user
 			// because IRC clients can't display DMs done by others on your behalf
 			if sender == sc.self {
-				if otherUser, err := sc.ResolveDMToUser(messageData.Channel); err != nil {
+				otherUser, err := sc.ResolveDMToUser(messageData.Channel)
+				if err != nil {
 					log.Printf("could not resolve DM user for message [%v]: %+v", err, messageData)
 					return
-				} else {
-					sender = otherUser
-					wasSenderSwapped = true
 				}
+
+				sender = otherUser
+				wasSenderSwapped = true
 			}
 		} else {
-			if channel, err := sc.ResolveChannel(messageData.Channel); err != nil {
+			channel, err := sc.ResolveChannel(messageData.Channel)
+			if err != nil {
 				log.Printf("could not resolve channel for message [%v]: %+v", err, messageData)
 				return
-			} else {
-				target = channel.Name
 			}
+			target = channel.Name
 		}
 	}
 
