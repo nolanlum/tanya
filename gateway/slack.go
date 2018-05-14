@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -310,9 +311,14 @@ type ClientChans struct {
 }
 
 // Initialize bootstraps the SlackClient with a client token
-func (sc *SlackClient) Initialize(token string) {
+func (sc *SlackClient) Initialize(token string, debug bool) {
 	sc.client = slack.New(token)
 	sc.rtm = sc.client.NewRTM()
+
+	if debug {
+		slack.SetLogger(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile))
+		sc.client.SetDebug(true)
+	}
 }
 
 // SendMessage sends a message to a SlackChannel

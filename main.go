@@ -14,6 +14,7 @@ import (
 
 var configPathFlag = flag.String("config", "config.toml", "path to config file")
 var noGenFlag = flag.Bool("no-generate", false, "disables auto-generation of config files")
+var debugFlag = flag.Bool("debug", false, "toggles Slack library debug mode (logs to stdout)")
 
 func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
 	<-sigChan
@@ -228,7 +229,7 @@ func main() {
 
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
-	slackClient.Initialize(conf.Slack.Token)
+	slackClient.Initialize(conf.Slack.Token, *debugFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
