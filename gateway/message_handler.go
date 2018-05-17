@@ -154,19 +154,11 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
 			return
 		}
-		quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorID)
-		if err != nil {
-			log.Printf("could not resolve quoted user for archive link [%v]: %+v", err, messageData.SubMessage)
-			return
-		}
+
 		incomingChan <- newSlackMessageEvent(
 			user,
 			target,
-			fmt.Sprintf(
-				"<%s> %s",
-				quotedUser.Nick,
-				sc.ParseMessageText(subMessage.Attachments[0].Text),
-			),
+			fmt.Sprint(sc.ParseMessageText(subMessage.Attachments[0].Fallback)),
 		)
 
 	case "channel_topic":
