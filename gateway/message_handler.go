@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/nlopes/slack"
 )
@@ -155,32 +154,11 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			log.Printf("could not resolve user for archive link [%v]: %+v", err, messageData.SubMessage)
 			return
 		}
-		quotedUser, err := sc.ResolveUser(subMessage.Attachments[0].AuthorID)
-		if err != nil {
-			log.Printf("could not resolve quoted user for archive link [%v]: %+v", err, messageData.SubMessage)
-			return
-		}
-
-		unixTs, err := subMessage.Attachments[0].Ts.Int64()
-		tsString := ""
-		if err == nil {
-			tsTime := time.Unix(unixTs, 0)
-			loc, err := time.LoadLocation("Local")
-			if err == nil {
-				tsTime = tsTime.In(loc)
-			}
-			tsString = "[" + tsTime.Format(time.Stamp) + "] "
-		}
 
 		incomingChan <- newSlackMessageEvent(
 			user,
 			target,
-			fmt.Sprintf(
-				"<%s> %s%s",
-				quotedUser.Nick,
-				tsString,
-				sc.ParseMessageText(subMessage.Attachments[0].Text),
-			),
+			fmt.Sprintf(sc.ParseMessageText(subMessage.Attachments[0].Fallback)),
 		)
 
 	case "channel_topic":
