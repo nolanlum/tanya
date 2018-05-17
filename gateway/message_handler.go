@@ -158,7 +158,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		incomingChan <- newSlackMessageEvent(
 			user,
 			target,
-			fmt.Sprintf(sc.ParseMessageText(subMessage.Attachments[0].Fallback)),
+			fmt.Sprint(sc.ParseMessageText(subMessage.Attachments[0].Fallback)),
 		)
 
 	case "channel_topic":
