@@ -96,9 +96,9 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		messageText := sc.ParseMessageText(messageData.Text)
 		for _, attachment := range messageData.Attachments {
 			if messageText == "" {
-				messageText = sc.slackURLDecoder.Replace(attachment.Fallback)
+				messageText = sc.ParseMessageText(attachment.Fallback)
 			} else {
-				messageText = messageText + "\n" + sc.slackURLDecoder.Replace(attachment.Fallback)
+				messageText = messageText + "\n" + sc.ParseMessageText(attachment.Fallback)
 			}
 		}
 
@@ -122,9 +122,9 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		messageText := sc.ParseMessageText(messageData.Text)
 		for _, attachment := range messageData.Attachments {
 			if messageText == "" {
-				messageText = sc.slackURLDecoder.Replace(attachment.Fallback)
+				messageText = sc.ParseMessageText(attachment.Fallback)
 			} else {
-				messageText = messageText + "\n" + sc.slackURLDecoder.Replace(attachment.Fallback)
+				messageText = messageText + "\n" + sc.ParseMessageText(attachment.Fallback)
 			}
 		}
 
