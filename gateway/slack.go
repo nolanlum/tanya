@@ -376,6 +376,11 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				connEventError := event.Data.(*slack.ConnectionErrorEvent)
 				log.Printf("error connecting to slack: %v\n", connEventError.Error())
 
+			case "incoming_error":
+				incomingEventError := event.Data.(*slack.IncomingEventError)
+				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf(
+					"incoming error from slack, disconnecting: %v", incomingEventError.Error()))
+
 			case "connecting":
 				connectingData := event.Data.(*slack.ConnectingEvent)
 

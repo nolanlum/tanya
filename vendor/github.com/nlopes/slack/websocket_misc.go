@@ -41,9 +41,6 @@ type RTMEvent struct {
 // HelloEvent represents the hello event
 type HelloEvent struct{}
 
-// GoodbyeEvent represents the goodbye event
-type GoodbyeEvent struct{}
-
 // PresenceChangeEvent represents the presence change event
 type PresenceChangeEvent struct {
 	Type     string `json:"type"`
@@ -83,7 +80,7 @@ type EmojiChangedEvent struct {
 	SubType        string   `json:"subtype"`
 	Name           string   `json:"name"`
 	Names          []string `json:"names"`
-	Value          string   `json:"value"` 
+	Value          string   `json:"value"`
 	EventTimestamp string   `json:"event_ts"`
 }
 
@@ -125,19 +122,19 @@ type ReconnectUrlEvent struct {
 
 // MemberJoinedChannelEvent, a user joined a public or private channel
 type MemberJoinedChannelEvent struct {
-    Type        string `json:"type"`
-    User        string `json:"user"`
-    Channel     string `json:"channel"`
-    ChannelType string `json:"channel_type"`
-    Team        string `json:"team"`
-    Inviter     string `json:"inviter"`
+	Type        string `json:"type"`
+	User        string `json:"user"`
+	Channel     string `json:"channel"`
+	ChannelType string `json:"channel_type"`
+	Team        string `json:"team"`
+	Inviter     string `json:"inviter"`
 }
 
 // MemberJoinedChannelEvent, a user left a public or private channel
 type MemberLeftChannelEvent struct {
-    Type        string `json:"type"`
-    User        string `json:"user"`
-    Channel     string `json:"channel"`
-    ChannelType string `json:"channel_type"`
-    Team        string `json:"team"`
+	Type        string `json:"type"`
+	User        string `json:"user"`
+	Channel     string `json:"channel"`
+	ChannelType string `json:"channel_type"`
+	Team        string `json:"team"`
 }
