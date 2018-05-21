@@ -26,6 +26,10 @@ func messageTextToEvents(sender *SlackUser, target, messageText string) []*Slack
 }
 
 func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messageData *slack.MessageEvent) {
+	if messageData.User == "USLACKBOT" {
+		return
+	}
+
 	var sender *SlackUser
 	if messageData.User != "" {
 		var err error
