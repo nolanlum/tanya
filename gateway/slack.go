@@ -424,10 +424,15 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				oldUserInfo := sc.userInfo[userData.User.ID]
 				newUserInfo := slackUserFromDto(&userData.User)
 
+				// Atomically replace the old user info object with the new
+				// Here we also need to update sc.self if our user info was updated
 				sc.Lock()
 				sc.userInfo[newUserInfo.SlackID] = newUserInfo
 				delete(sc.nickToUserMap, oldUserInfo.Nick)
 				sc.nickToUserMap[newUserInfo.Nick] = newUserInfo.SlackID
+				if userData.User.ID == sc.self.SlackID {
+					sc.self = newUserInfo
+				}
 				sc.Unlock()
 
 				// Send nick change event if necessary
