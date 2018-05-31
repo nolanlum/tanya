@@ -14,16 +14,17 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "master"
+  branch = "tanya"
   name = "github.com/nlopes/slack"
   packages = ["."]
-  revision = "d8ac454a777b2593d818e3e634bb99245962c42b"
+  revision = "54ee9d519e9e8d9b675f01ed2f17b37f1027ba13"
+  source = "github.com/nolanlum/slack"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "c4a91bd4f524f10d064139674cf55852e055ad01"
+  revision = "75e913eb8a8e3d31a97b216de09de106a7b07681"
 
 [[projects]]
   branch = "master"
@@ -32,11 +33,11 @@
     "unix",
     "windows"
   ]
-  revision = "8c0ece68c28377f4c326d85b94f8df0dace46f80"
+  revision = "77b0e4315053a57ed2962443614bdb28db152054"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "25bb62e8e4c5a4c4b34ac57565e1bcb2896fb5f02ee39c32fdeb32d5f1d22e31"
+  inputs-digest = "23758797cbab8522a05da1010eadee3e543b237a14a89775926af46b55885f19"
   solver-name = "gps-cdcl"
   solver-version = 1
