@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/url"
 	"strconv"
 )
@@ -169,11 +168,11 @@ type TeamIdentity struct {
 }
 
 type userResponseFull struct {
-	Members      []User                  `json:"members,omitempty"` // ListUsers
-	User         `json:"user,omitempty"` // GetUserInfo
-	UserPresence                         // GetUserPresence
+	Members []User `json:"members,omitempty"`
+	User    `json:"user,omitempty"`
+	UserPresence
 	SlackResponse
-	Metadata ResponseMetadata
+	Metadata ResponseMetadata `json:"response_metadata"`
 }
 
 type UserSetPhotoParams struct {
@@ -312,7 +311,6 @@ func (t UserPagination) Next(ctx context.Context) (_ UserPagination, err error) 
 	}
 
 	if resp, err = userRequest(ctx, t.c.httpclient, "users.list", values, t.c.debug); err != nil {
-		log.Println("error during user request", err)
 		return t, err
 	}
 
@@ -549,7 +547,7 @@ func (api *Client) GetUserProfileContext(ctx context.Context, userID string, inc
 	}
 	resp := &getUserProfileResponse{}
 
-	err := post(ctx, api.httpclient, "users.profile.get", values, &resp, api.debug)
+	err := postSlackMethod(ctx, api.httpclient, "users.profile.get", values, &resp, api.debug)
 	if err != nil {
 		return nil, err
 	}
