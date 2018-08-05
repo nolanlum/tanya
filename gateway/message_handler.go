@@ -115,6 +115,14 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			incomingChan <- messageEvent
 		}
 
+		// Handle file uploads
+		if messageData.Upload {
+			for _, file := range messageData.Files {
+				incomingChan <- newSlackMessageEvent(
+					sender, target, fmt.Sprintf("@%s uploaded a file: %s %s", sender.Nick, file.Name, file.URLPrivate))
+			}
+		}
+
 	case "bot_message":
 		if sender == nil {
 			sender = slackFakeUser
