@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 )
 
 type clientState int
@@ -29,7 +30,9 @@ type clientConnection struct {
 
 	outgoingMessages chan *Message
 	serverChan       chan<- *ServerMessage
-	shutdown         chan interface{}
+
+	slackConnected <-chan interface{}
+	shutdown       chan interface{}
 }
 
 func newClientConnection(
@@ -38,6 +41,7 @@ func newClientConnection(
 	config *Config,
 	stateProvider ServerStateProvider,
 	serverChan chan *ServerMessage,
+	slackConnectedChan <-chan interface{},
 ) *clientConnection {
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
@@ -51,7 +55,9 @@ func newClientConnection(
 
 		outgoingMessages: make(chan *Message),
 		serverChan:       serverChan,
-		shutdown:         make(chan interface{}),
+
+		slackConnected: slackConnectedChan,
+		shutdown:       make(chan interface{}),
 	}
 }
 
@@ -73,6 +79,16 @@ func (cc *clientConnection) finishRegistration() {
 
 func (cc *clientConnection) handleConnInput() {
 	defer cc.conn.Close()
+
+	// Wait for Slack connect burst before handling incoming messages.
+	select {
+	case <-time.After(2 * time.Second):
+		// Write a raw IRC line here, since the outgoing message channel eats any messages
+		// sent before client registration.
+		fmt.Fprintf(cc.conn, ":%s NOTICE * :Waiting for Slack connection...\n", cc.config.ServerName)
+		<-cc.slackConnected
+	case <-cc.slackConnected:
+	}
 
 	s := bufio.NewScanner(cc.conn)
 

@@ -14,6 +14,9 @@ type Server struct {
 	clientConnections map[net.Addr]*clientConnection
 	stopChan          <-chan interface{}
 
+	initOnce sync.Once
+	initChan chan interface{}
+
 	selfUser      User
 	config        *Config
 	stateProvider ServerStateProvider
@@ -40,6 +43,8 @@ func NewServer(config *Config, stopChan <-chan interface{}, stateProvider Server
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
 		stopChan:          stopChan,
+
+		initChan: make(chan interface{}),
 
 		config:        config,
 		stateProvider: stateProvider,
@@ -77,7 +82,7 @@ func (s *Server) Listen() {
 			}
 		}
 
-		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider, serverChan)
+		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider, serverChan, s.initChan)
 		log.Printf("IRC client connected: %v", cc)
 
 		s.Lock()
@@ -179,6 +184,8 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 		}
 		s.RUnlock()
 	}
+
+	s.initOnce.Do(func() { close(s.initChan) })
 }
 
 // ServerStateProvider contains methods used by the IRC server to answer
