@@ -67,9 +67,9 @@ func (s *Server) Listen() {
 	log.Printf("IRC server now listening on %v", addr)
 	serverChan := make(chan *ServerMessage)
 	go s.handleIncomingMessageRouting(serverChan)
+	go s.waitForKillListener(l)
 
 	for {
-		go s.waitForKillListener(l)
 		conn, err := l.AcceptTCP()
 		if err != nil {
 			if strings.HasSuffix(err.Error(), "closed network connection") {
