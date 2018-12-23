@@ -120,8 +120,13 @@ func (sc *SlackClient) handleMemberJoinedChannel(channelID, userID string) (*Sla
 		sc.Unlock()
 	}
 
+	eventType := JoinEvent
+	if user == sc.self {
+		eventType = SelfJoinEvent
+	}
+
 	return &SlackEvent{
-		EventType: JoinEvent,
+		EventType: eventType,
 		Data: &JoinPartEventData{
 			User:   *user,
 			Target: target.Name,
