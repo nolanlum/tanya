@@ -192,9 +192,12 @@ func (s *Server) HandleConnectBurst(selfUser User) {
 // This special signalling is necessary due to the extra data (NAMES/topic) which
 // needs to be sent by the IRC server on join.
 func (s *Server) HandleChannelJoined(channelName string) {
+	topic := s.stateProvider.GetChannelTopic(channelName)
+	users := s.stateProvider.GetChannelUsers(channelName)
+
 	s.RLock()
 	for _, v := range s.clientConnections {
-		v.handleChannelJoined(channelName)
+		v.sendChannelJoinedResponse(channelName, topic, users)
 	}
 	s.RUnlock()
 }
