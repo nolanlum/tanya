@@ -9,6 +9,7 @@ const (
 	MessageEvent
 	NickChangeEvent
 	TopicChangeEvent
+	SelfJoinEvent
 	JoinEvent
 	PartEvent
 )

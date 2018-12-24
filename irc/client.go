@@ -213,7 +213,9 @@ SelectLoop:
 			case TopicCmd:
 				// nolint: megacheck
 				if len(msg.Params) == 1 {
-					cc.sendChannelTopic(msg.Params[0])
+					channelName := msg.Params[0]
+					topic := cc.stateProvider.GetChannelTopic(channelName)
+					cc.sendChannelTopic(channelName, topic)
 				} else {
 					// TODO implement setting the topic
 				}
@@ -347,8 +349,7 @@ func (cc *clientConnection) sendWelcome() {
 	}
 }
 
-func (cc *clientConnection) sendChannelTopic(channelName string) {
-	topic := cc.stateProvider.GetChannelTopic(channelName)
+func (cc *clientConnection) sendChannelTopic(channelName string, topic ChannelTopic) {
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
 		Params: []string{channelName, topic.Topic},
@@ -365,15 +366,21 @@ func (cc *clientConnection) sendChannelTopic(channelName string) {
 }
 
 func (cc *clientConnection) handleChannelJoined(channelName string) {
+	topic := cc.stateProvider.GetChannelTopic(channelName)
+	users := cc.stateProvider.GetChannelUsers(channelName)
+
+	cc.sendChannelJoinedResponse(channelName, topic, users)
+}
+
+func (cc *clientConnection) sendChannelJoinedResponse(channelName string, topic ChannelTopic, users []User) {
 	joinResponse := (&Join{
 		User:    cc.clientUser,
 		Channel: channelName,
 	}).ToMessage()
 	cc.outgoingMessages <- joinResponse
 
-	cc.sendChannelTopic(channelName)
+	cc.sendChannelTopic(channelName, topic)
 
-	users := cc.stateProvider.GetChannelUsers(channelName)
 	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
 	}

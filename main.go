@@ -200,6 +200,8 @@ Loop:
 			case gateway.TopicChangeEvent:
 				t := slackToTopic(msg.Data.(*gateway.TopicChangeEventData))
 				sendChan <- t.ToMessage()
+			case gateway.SelfJoinEvent:
+				server.HandleChannelJoined(msg.Data.(*gateway.JoinPartEventData).Target)
 			case gateway.JoinEvent:
 				j := slackToJoin(msg.Data.(*gateway.JoinPartEventData))
 				sendChan <- j.ToMessage()
