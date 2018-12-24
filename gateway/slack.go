@@ -83,6 +83,9 @@ func NewSlackClient() *SlackClient {
 		channelMemberships: make(map[string]*SlackChannel),
 		channelMembers:     make(map[string]map[string]*SlackUser),
 
+		nickToUserMap:      make(map[string]string),
+		channelNameToIDMap: make(map[string]string),
+
 		slackURLEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
 		slackURLDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
 	}
