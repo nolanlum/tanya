@@ -48,6 +48,7 @@ func (cm *ConversationMarker) HandleRTMAck(messageID int, timestamp string) {
 
 	markFunc, found := cm.rtmIDToMarkFuncMap[messageID]
 	if found {
+		delete(cm.rtmIDToMarkFuncMap, messageID)
 		markFunc(timestamp)
 	}
 }
