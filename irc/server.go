@@ -211,6 +211,8 @@ type ServerStateProvider interface {
 
 	GetChannelCTime(channelName string) time.Time
 
+	GetChannelPrivate(channelName string) bool
+
 	GetJoinedChannels() []string
 
 	SendPrivmsg(privMsg *Privmsg)

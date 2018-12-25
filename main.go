@@ -131,6 +131,17 @@ func (c *corpusCallosum) GetChannelCTime(channelName string) time.Time {
 	return channel.Created
 }
 
+// GetChannelPrivate implements irc.ServerStateProvider.GetChannelPrivate
+func (c *corpusCallosum) GetChannelPrivate(channelName string) bool {
+	channel := c.sc.ResolveNameToChannel(channelName)
+	if channel == nil {
+		log.Printf("error while querying private flag for %v: channel_not_found", channelName)
+		return false
+	}
+
+	return channel.Private
+}
+
 // GetJoinedChannels implements irc.ServerStateProvider.GetJoinedChannels
 func (c *corpusCallosum) GetJoinedChannels() []string {
 	var channelNames []string
