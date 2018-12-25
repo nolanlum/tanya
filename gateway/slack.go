@@ -16,6 +16,7 @@ type SlackChannel struct {
 	SlackID string
 	Name    string
 	Created time.Time
+	Private bool
 
 	Topic slack.Topic
 }
@@ -25,6 +26,7 @@ func slackChannelFromDto(channel *slack.Channel) *SlackChannel {
 		SlackID: channel.ID,
 		Name:    "#" + channel.Name,
 		Created: channel.Created.Time(),
+		Private: channel.IsGroup,
 		Topic:   channel.Topic,
 	}
 }
@@ -67,9 +69,11 @@ type SlackClient struct {
 
 	nickToUserMap      map[string]string
 	channelNameToIDMap map[string]string
+	userIDToDMIDMap    map[string]string
 
-	slackURLEncoder *strings.Replacer
-	slackURLDecoder *strings.Replacer
+	slackURLEncoder    *strings.Replacer
+	slackURLDecoder    *strings.Replacer
+	conversationMarker *ConversationMarker
 
 	sync.RWMutex
 }
@@ -85,9 +89,11 @@ func NewSlackClient() *SlackClient {
 
 		nickToUserMap:      make(map[string]string),
 		channelNameToIDMap: make(map[string]string),
+		userIDToDMIDMap:    make(map[string]string),
 
-		slackURLEncoder: strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
-		slackURLDecoder: strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+		slackURLEncoder:    strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
+		slackURLDecoder:    strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+		conversationMarker: NewConversationMarker(),
 	}
 }
 
@@ -171,6 +177,11 @@ func (sc *SlackClient) regenerateReverseMappings() {
 	sc.channelNameToIDMap = make(map[string]string)
 	for _, channel := range sc.channelInfo {
 		sc.channelNameToIDMap[channel.Name] = channel.SlackID
+	}
+
+	sc.userIDToDMIDMap = make(map[string]string)
+	for dmID, user := range sc.dmInfo {
+		sc.userIDToDMIDMap[user.SlackID] = dmID
 	}
 }
 
@@ -257,6 +268,29 @@ func (sc *SlackClient) ResolveNickToUser(nick string) *SlackUser {
 	return nil
 }
 
+// ResolveUserToDM resolves a SlackUser to their DM channel, opening one if it doesn't exist
+func (sc *SlackClient) ResolveUserToDM(user *SlackUser) (string, error) {
+	sc.RLock()
+	dmID, found := sc.userIDToDMIDMap[user.SlackID]
+	sc.RUnlock()
+
+	if found {
+		return dmID, nil
+	}
+
+	_, _, dmID, err := sc.client.OpenIMChannel(user.SlackID)
+	if err != nil {
+		return "", err
+	}
+
+	sc.Lock()
+	sc.dmInfo[dmID] = user
+	sc.userIDToDMIDMap[user.SlackID] = dmID
+	sc.Unlock()
+
+	return dmID, nil
+}
+
 // ResolveDMToUser resolves a DM/IM Channel ID to the User the DM is for
 func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 	sc.RLock()
@@ -278,6 +312,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 		// Skip this IM if we cannot find the user it belongs to
 		if userInfo, found := sc.userInfo[im.User]; found {
 			sc.dmInfo[im.ID] = userInfo
+			sc.userIDToDMIDMap[userInfo.SlackID] = im.ID
 			if im.ID == dmChannelID {
 				slackUser = userInfo
 			}
@@ -327,18 +362,29 @@ func (sc *SlackClient) Initialize(token string, debug bool) {
 // SendMessage sends a message to a SlackChannel
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
 	msg = sc.UnparseMessageText(msg)
-	sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage(msg, channel.SlackID))
+	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, channel.SlackID)
+
+	if channel.Private {
+		sc.conversationMarker.MarkGroup(sc.client, channel.SlackID, outgoingMessage.ID)
+	} else {
+		sc.conversationMarker.MarkChannel(sc.client, channel.SlackID, outgoingMessage.ID)
+	}
+
+	sc.rtm.SendMessage(outgoingMessage)
 	return nil
 }
 
 // SendDirectMessage sends a message to a SlackUser
 func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
-	msg = sc.UnparseMessageText(msg)
-	_, _, imChannelID, err := sc.client.OpenIMChannel(user.SlackID)
+	imChannelID, err := sc.ResolveUserToDM(user)
 	if err != nil {
 		return err
 	}
-	sc.rtm.SendMessage(sc.rtm.NewOutgoingMessage(msg, imChannelID))
+
+	msg = sc.UnparseMessageText(msg)
+	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, imChannelID)
+	sc.conversationMarker.MarkDM(sc.client, imChannelID, outgoingMessage.ID)
+	sc.rtm.SendMessage(outgoingMessage)
 	return nil
 }
 
@@ -500,7 +546,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				chans.IncomingChan <- partEvent
 
-			case "channel_marked", "group_marked", "thread_marked", "im_marked",
+			case "channel_marked", "group_marked", "thread_marked", "im_marked", "im_open",
 				"latency_report", "user_typing", "pref_change", "dnd_updated_user",
 				"file_created", "file_public",
 				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
@@ -509,6 +555,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "ack":
 				// maybe we care about this
 				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
+					sc.conversationMarker.HandleRTMAck(ack.ReplyTo, ack.Timestamp)
 					continue
 				}
 				fallthrough
