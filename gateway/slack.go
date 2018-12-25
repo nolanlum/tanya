@@ -426,11 +426,11 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				// Atomically check and replace the old user info object with the new
 				sc.Lock()
-				oldUserInfo, exists := sc.userInfo[userData.User.ID]
+				oldUserInfo, hadOldUserInfo := sc.userInfo[userData.User.ID]
 				sc.userInfo[newUserInfo.SlackID] = newUserInfo
 
 				// Un-map the old nick, if we had one, and insert an entry for the new
-				if exists {
+				if hadOldUserInfo {
 					delete(sc.nickToUserMap, oldUserInfo.Nick)
 				}
 				sc.nickToUserMap[newUserInfo.Nick] = newUserInfo.SlackID
@@ -442,7 +442,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				sc.Unlock()
 
 				// Send nick change event if necessary
-				if (oldUserInfo != nil) && (oldUserInfo.Nick != newUserInfo.Nick) {
+				if hadOldUserInfo && (oldUserInfo.Nick != newUserInfo.Nick) {
 					chans.IncomingChan <- &SlackEvent{
 						EventType: NickChangeEvent,
 						Data: &NickChangeEventData{
