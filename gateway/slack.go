@@ -422,24 +422,27 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "user_change":
 				userData := event.Data.(*slack.UserChangeEvent)
-
-				// Update user info based on the new DTO
-				oldUserInfo := sc.userInfo[userData.User.ID]
 				newUserInfo := slackUserFromDto(&userData.User)
 
-				// Atomically replace the old user info object with the new
-				// Here we also need to update sc.self if our user info was updated
+				// Atomically check and replace the old user info object with the new
 				sc.Lock()
+				oldUserInfo, hadOldUserInfo := sc.userInfo[userData.User.ID]
 				sc.userInfo[newUserInfo.SlackID] = newUserInfo
-				delete(sc.nickToUserMap, oldUserInfo.Nick)
+
+				// Un-map the old nick, if we had one, and insert an entry for the new
+				if hadOldUserInfo {
+					delete(sc.nickToUserMap, oldUserInfo.Nick)
+				}
 				sc.nickToUserMap[newUserInfo.Nick] = newUserInfo.SlackID
+
+				// Here we also need to update sc.self if our user info was updated
 				if userData.User.ID == sc.self.SlackID {
 					sc.self = newUserInfo
 				}
 				sc.Unlock()
 
 				// Send nick change event if necessary
-				if oldUserInfo.Nick != newUserInfo.Nick {
+				if hadOldUserInfo && (oldUserInfo.Nick != newUserInfo.Nick) {
 					chans.IncomingChan <- &SlackEvent{
 						EventType: NickChangeEvent,
 						Data: &NickChangeEventData{
