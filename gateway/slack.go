@@ -442,7 +442,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				sc.Unlock()
 
 				// Send nick change event if necessary
-				if oldUserInfo.Nick != newUserInfo.Nick {
+				if (oldUserInfo != nil) && (oldUserInfo.Nick != newUserInfo.Nick) {
 					chans.IncomingChan <- &SlackEvent{
 						EventType: NickChangeEvent,
 						Data: &NickChangeEventData{
