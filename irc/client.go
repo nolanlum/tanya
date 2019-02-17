@@ -195,19 +195,23 @@ SelectLoop:
 			case ModeCmd:
 				if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
 					// For Slack we only want to handle querying channel modes...
-					// And they'll always be just +nt
 					continue
 				}
 
+				channelName := msg.Params[0]
+				channelModes := "+nt"
+				if cc.stateProvider.GetChannelPrivate(channelName) {
+					channelModes += "sp"
+				}
 				cc.outgoingMessages <- cc.reply(NumericReply{
 					Code:   RPL_CHANNELMODEIS,
-					Params: []string{msg.Params[0], "+nt"},
+					Params: []string{channelName, channelModes},
 				})
 
-				ctime := cc.stateProvider.GetChannelCTime(msg.Params[0])
+				ctime := cc.stateProvider.GetChannelCTime(channelName)
 				cc.outgoingMessages <- cc.reply(NumericReply{
 					Code:   RPL_CREATIONTIME,
-					Params: []string{msg.Params[0], fmt.Sprintf("%v", ctime.Unix())},
+					Params: []string{channelName, fmt.Sprintf("%v", ctime.Unix())},
 				})
 
 			case TopicCmd:
