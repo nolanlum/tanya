@@ -349,14 +349,14 @@ type ClientChans struct {
 
 // Initialize bootstraps the SlackClient with a client token
 func (sc *SlackClient) Initialize(token string, debug bool) {
-	sc.client = slack.New(token)
-	sc.rtm = sc.client.NewRTM()
-
 	if debug {
-		slack.SetLogger(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile))
-		sc.client.SetDebug(true)
-		sc.rtm.SetDebug(true)
+		sc.client = slack.New(
+			token, slack.OptionDebug(true), slack.OptionLog(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)))
+	} else {
+		sc.client = slack.New(token)
 	}
+
+	sc.rtm = sc.client.NewRTM()
 }
 
 // SendMessage sends a message to a SlackChannel
