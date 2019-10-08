@@ -146,8 +146,28 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 
 	case "message_changed":
 		subMessage := messageData.SubMessage
-		if subMessage == nil || subMessage.SubType != "" {
-			log.Printf("message_changed with unexpected or missing submessage: %+v SubMessage:%+v",
+		if subMessage == nil {
+			log.Printf("message_changed with missing submessage: %+v SubMessage:%+v",
+				messageData, messageData.SubMessage)
+			return
+		}
+
+		if subMessage.Type != "message" {
+			log.Printf("message_changed with unexpected submessage type: %+v SubMessage:%+v",
+				messageData, messageData.SubMessage)
+			return
+		}
+
+		switch subMessage.SubType {
+		case "":
+			// Continue handling messages with empty SubType.
+
+		case "thread_broadcast", "bot_message":
+			// Ignore thread broadcast expands and modified bot messages.
+			return
+
+		default:
+			log.Printf("message_changed with unexpected submessage subtype: %+v SubMessage:%+v",
 				messageData, messageData.SubMessage)
 			return
 		}
