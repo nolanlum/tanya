@@ -2,50 +2,68 @@
 
 
 [[projects]]
+  digest = "1:9f3b30d9f8e0d7040f729b82dcbc8f0dead820a133b3147ce355fc451f32d761"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
+  pruneopts = "UT"
   revision = "3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005"
   version = "v0.3.1"
 
 [[projects]]
+  digest = "1:e62657cca9badaa308d86e7716083e4c5933bb78e30a17743fc67f50be26f6f4"
   name = "github.com/gorilla/websocket"
   packages = ["."]
-  revision = "66b9c49e59c6c48f0ffce28c2d8b8a5678502c6d"
-  version = "v1.4.0"
+  pruneopts = "UT"
+  revision = "c3e18be99d19e6b3e8f1559eea2c161a665c4b6b"
+  version = "v1.4.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:6fe1f4df3242a289edb677886608950c7f100786a3fb89bf132a03afa0005a33"
   name = "github.com/nlopes/slack"
   packages = [
     ".",
-    "slackutilsx"
+    "internal/errorsx",
+    "internal/timex",
+    "slackutilsx",
   ]
-  revision = "e73b432e20b0f00bfa92b15f51e43fc79247611b"
+  pruneopts = "UT"
+  revision = "e5749f13b5af3c139165ab4180a95bb06a60128b"
 
 [[projects]]
+  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
   name = "github.com/pkg/errors"
   packages = ["."]
+  pruneopts = "UT"
   revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
   version = "v0.8.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:bbe51412d9915d64ffaa96b51d409e070665efc5194fcf145c4a27d4133107a4"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "74369b46fc6756741c016591724fd1cb8e26845f"
+  pruneopts = "UT"
+  revision = "34f69633bfdcf9db92f698f8487115767eebef81"
 
 [[projects]]
   branch = "master"
+  digest = "1:66da9400d3f58a196e86efa1b0c8ea0b1aae330a6ec234b26ad27ba42f74f019"
   name = "golang.org/x/sys"
   packages = [
     "unix",
-    "windows"
+    "windows",
   ]
-  revision = "d0b11bdaac8adb652bff00e49bcacf992835621a"
+  pruneopts = "UT"
+  revision = "543471e840be449c53d44b32c7adf1261ad67e37"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "25bb62e8e4c5a4c4b34ac57565e1bcb2896fb5f02ee39c32fdeb32d5f1d22e31"
+  input-imports = [
+    "github.com/BurntSushi/toml",
+    "github.com/nlopes/slack",
+    "golang.org/x/crypto/ssh/terminal",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
