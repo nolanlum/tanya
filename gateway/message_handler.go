@@ -92,7 +92,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			incomingChan <- messageEvent
 		}
 
-	case "", "pinned_item":
+	case "", "pinned_item", "thread_broadcast":
 		if sender == nil || target == "" {
 			return
 		}
