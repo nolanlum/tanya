@@ -34,7 +34,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 	if messageData.User != "" {
 		var err error
 		if sender, err = sc.ResolveUser(messageData.User); err != nil {
-			log.Printf("%s could not resolve user for message [%v]: %+v", sc.logtag(), err, messageData)
+			log.Printf("%s could not resolve user for message [%v]: %+v", sc.Tag(), err, messageData)
 			return
 		}
 	}
@@ -50,7 +50,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			if sender == sc.self {
 				otherUser, err := sc.ResolveDMToUser(messageData.Channel)
 				if err != nil {
-					log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.logtag(), err, messageData)
+					log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.Tag(), err, messageData)
 					return
 				}
 
@@ -60,7 +60,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		} else {
 			channel, err := sc.ResolveChannel(messageData.Channel)
 			if err != nil {
-				log.Printf("%s could not resolve channel for message [%v]: %+v", sc.logtag(), err, messageData)
+				log.Printf("%s could not resolve channel for message [%v]: %+v", sc.Tag(), err, messageData)
 				return
 			}
 			target = channel.Name
@@ -148,13 +148,13 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		subMessage := messageData.SubMessage
 		if subMessage == nil {
 			log.Printf("%s message_changed with missing submessage: %+v SubMessage:%+v",
-				sc.logtag(), messageData, messageData.SubMessage)
+				sc.Tag(), messageData, messageData.SubMessage)
 			return
 		}
 
 		if subMessage.Type != "message" {
 			log.Printf("%s message_changed with unexpected submessage type: %+v SubMessage:%+v",
-				sc.logtag(), messageData, messageData.SubMessage)
+				sc.Tag(), messageData, messageData.SubMessage)
 			return
 		}
 
@@ -168,7 +168,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 
 		default:
 			log.Printf("%s message_changed with unexpected submessage subtype: %+v SubMessage:%+v",
-				sc.logtag(), messageData, messageData.SubMessage)
+				sc.Tag(), messageData, messageData.SubMessage)
 			return
 		}
 
@@ -184,7 +184,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		user, err := sc.ResolveUser(subMessage.User)
 		if err != nil {
 			log.Printf("%s could not resolve user for archive link [%v]: %+v",
-				sc.logtag(), err, messageData.SubMessage)
+				sc.Tag(), err, messageData.SubMessage)
 			return
 		}
 
@@ -218,6 +218,6 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 
 	default:
 		log.Printf("%s unhandled message sub-type [%v]: %+v SubMessage:%+v",
-			sc.logtag(), messageData.SubType, messageData, messageData.SubMessage)
+			sc.Tag(), messageData.SubType, messageData, messageData.SubMessage)
 	}
 }

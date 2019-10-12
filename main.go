@@ -79,13 +79,13 @@ type corpusCallosum struct {
 func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
 	channel := c.sc.ResolveNameToChannel(channelName)
 	if channel == nil {
-		log.Printf("error while querying user list for %v: channel_not_found", channelName)
+		log.Printf("%s error while querying user list for %v: channel_not_found", c.sc.Tag(), channelName)
 		return nil
 	}
 
 	channelUsers, err := c.sc.GetChannelUsers(channel.SlackID)
 	if err != nil {
-		log.Printf("error while querying user list for %v: %v", channelName, err)
+		log.Printf("%s error while querying user list for %v: %v", c.sc.Tag(), channelName, err)
 		return nil
 	}
 
@@ -100,7 +100,7 @@ func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
 func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelTopic) {
 	channel := c.sc.ResolveNameToChannel(channelName)
 	if channel == nil {
-		log.Printf("error while querying topic for %v: channel_not_found", channelName)
+		log.Printf("%s error while querying topic for %v: channel_not_found", c.sc.Tag(), channelName)
 		return
 	}
 
@@ -111,7 +111,7 @@ func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelT
 	if channel.Topic.Creator != "" {
 		setBy, err := c.sc.ResolveUser(channel.Topic.Creator)
 		if err != nil {
-			log.Printf("error while querying topic creator for %v: %v", channelName, err)
+			log.Printf("%s error while querying topic creator for %v: %v", c.sc.Tag(), channelName, err)
 			return
 		}
 		topic.SetBy = setBy.Nick
@@ -124,7 +124,7 @@ func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelT
 func (c *corpusCallosum) GetChannelCTime(channelName string) time.Time {
 	channel := c.sc.ResolveNameToChannel(channelName)
 	if channel == nil {
-		log.Printf("error while querying ctime for %v: channel_not_found", channelName)
+		log.Printf("%s error while querying ctime for %v: channel_not_found", c.sc.Tag(), channelName)
 		return time.Time{}
 	}
 
@@ -135,7 +135,7 @@ func (c *corpusCallosum) GetChannelCTime(channelName string) time.Time {
 func (c *corpusCallosum) GetChannelPrivate(channelName string) bool {
 	channel := c.sc.ResolveNameToChannel(channelName)
 	if channel == nil {
-		log.Printf("error while querying private flag for %v: channel_not_found", channelName)
+		log.Printf("%s error while querying private flag for %v: channel_not_found", c.sc.Tag(), channelName)
 		return false
 	}
 
@@ -164,7 +164,7 @@ func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 		channel := c.sc.ResolveNameToChannel(privMsg.Target)
 		err := c.sc.SendMessage(channel, privMsg.Message)
 		if err != nil {
-			log.Printf("error sending slack message: %v\n", err)
+			log.Printf("%s error sending slack message: %v\n", c.sc.Tag(), err)
 		}
 	} else if privMsg.IsValidTarget() {
 		slackUser := c.sc.ResolveNickToUser(privMsg.Target)
