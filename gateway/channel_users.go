@@ -55,14 +55,14 @@ func (sc *SlackClient) bootstrapChannelUserList() {
 		channelID := channelID
 		go func() {
 			if _, err := sc.GetChannelUsers(channelID); err != nil {
-				log.Printf("error while bootstrapping user list for %v: %v", channelID, err)
+				log.Printf("%s error while bootstrapping user list for %v: %v", sc.logtag(), channelID, err)
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
 
-	log.Printf("slack:init channel_userlists:%v time:%v", len(sc.channelMembers), time.Since(startTime))
+	log.Printf("%s slack:init channel_userlists:%v time:%v", sc.logtag(), len(sc.channelMembers), time.Since(startTime))
 }
 
 // GetChannelUsers returns a locally cached list of users in the given channel

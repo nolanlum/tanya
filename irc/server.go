@@ -64,7 +64,7 @@ func (s *Server) Listen() {
 	}
 	defer l.Close()
 
-	log.Printf("IRC server now listening on %v", addr)
+	log.Printf("[:%d] IRC server now listening on %v", addr.Port, addr)
 	serverChan := make(chan *ServerMessage)
 	go s.handleIncomingMessageRouting(serverChan)
 	go s.waitForKillListener(l)
@@ -83,7 +83,7 @@ func (s *Server) Listen() {
 		}
 
 		cc := newClientConnection(conn, &s.selfUser, s.config, s.stateProvider, serverChan, s.initChan)
-		log.Printf("IRC client connected: %v", cc)
+		log.Printf("[:%d] IRC client connected: %v", addr.Port, cc)
 
 		s.Lock()
 		s.clientConnections[conn.RemoteAddr()] = cc
@@ -98,7 +98,7 @@ func (s *Server) Listen() {
 func (s *Server) waitForClientCleanup(cc *clientConnection) {
 	<-cc.shutdown
 
-	log.Printf("IRC client disconnected: %v", cc)
+	log.Printf("[:%d] IRC client disconnected: %v", cc.conn.LocalAddr().(*net.TCPAddr).Port, cc)
 
 	s.Lock()
 	delete(s.clientConnections, cc.conn.RemoteAddr())

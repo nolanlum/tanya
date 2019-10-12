@@ -32,7 +32,7 @@ func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonical
 			// User ID ref
 			user, err := sc.ResolveUser(ref[1:])
 			if err != nil {
-				log.Printf("error while parsing message, could not resolve ref %v: %v", ref, err)
+				log.Printf("%s error while parsing message, could not resolve ref %v: %v", sc.logtag(), ref, err)
 				parsedMessageBuilder.WriteString(ref)
 				break
 			}
@@ -44,7 +44,7 @@ func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonical
 			// Channel ref -- as far as I can tell the real name will be included luckily.
 			channelRefParts := strings.SplitN(ref, "|", 2)
 			if len(channelRefParts) != 2 {
-				log.Printf("error while parsing message, could not parse channel ref: %v", ref)
+				log.Printf("%s error while parsing message, could not parse channel ref: %v", sc.logtag(), ref)
 				parsedMessageBuilder.WriteString(ref)
 				break
 			}

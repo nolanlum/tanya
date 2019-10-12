@@ -159,7 +159,7 @@ func (sc *SlackClient) bootstrapMappings() {
 
 	sc.regenerateReverseMappings()
 
-	log.Printf("slack:init channels:%v users:%v dms:%v memberships:%v time:%v",
+	log.Printf("%s slack:init channels:%v users:%v dms:%v memberships:%v time:%v", sc.logtag(),
 		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Since(startTime))
 }
 
@@ -423,7 +423,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			switch event.Type {
 			case "connection_error":
 				connEventError := event.Data.(*slack.ConnectionErrorEvent)
-				log.Printf("error connecting to slack: %v\n", connEventError.Error())
+				log.Printf("%s slack connection error: %v\n", sc.logtag(), connEventError.Error())
 
 			case "incoming_error":
 				incomingEventError := event.Data.(*slack.IncomingEventError)
@@ -437,6 +437,9 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				if connectingData.ConnectionCount > 1 {
 					verb = "reconnecting"
 				}
+
+				log.Printf("%s[#%d] tanya connecting to slack (attempt %d)",
+					sc.logtag(), connectingData.ConnectionCount, connectingData.Attempt)
 				chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf(
 					"%s to slack (attempt %d)", verb, connectingData.Attempt))
 
@@ -446,7 +449,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				go sc.bootstrapChannelUserList()
 				sc.self = sc.userInfo[connectedData.Info.User.ID]
 
-				log.Printf("tanya connected to slack as %v\n", sc.self)
+				log.Printf("%s tanya connected to slack as %v\n", sc.logtag(), sc.self)
 
 				chans.IncomingChan <- &SlackEvent{
 					EventType: SlackConnectedEvent,
@@ -459,7 +462,8 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				chans.IncomingChan <- sc.newInternalMessageEvent("connected to slack!")
 
 			case "disconnected":
-				log.Println("tanya disconnected from slack")
+				disconnectedData := event.Data.(*slack.DisconnectedEvent)
+				log.Printf("%s disconnected from slack: %v", sc.logtag(), disconnectedData.Cause)
 				chans.IncomingChan <- sc.newInternalMessageEvent("disconnected from slack!")
 
 			case "message":
@@ -507,13 +511,13 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				target, err := sc.ResolveChannel(file.Channels[0])
 				if err != nil {
-					log.Println(err)
+					log.Printf("%s %v", sc.logtag(), err)
 					continue
 				}
 
 				user, err := sc.ResolveUser(file.User)
 				if err != nil {
-					log.Println(err)
+					log.Printf("%s %v", sc.logtag(), err)
 					continue
 				}
 
@@ -561,8 +565,17 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				fallthrough
 
 			default:
-				log.Printf("unhandled event [%v]: %+v", event.Type, event.Data)
+				log.Printf("%s unhandled event [%v]: %+v", sc.logtag(), event.Type, event.Data)
 			}
 		}
+	}
+}
+
+func (sc *SlackClient) logtag() string {
+	switch sc.self {
+	case nil:
+		return fmt.Sprintf("[%-12p]", sc)
+	default:
+		return fmt.Sprintf("[%-12s]", sc.self.SlackID)
 	}
 }
