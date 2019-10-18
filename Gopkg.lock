@@ -18,8 +18,8 @@
   version = "v1.4.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:6fe1f4df3242a289edb677886608950c7f100786a3fb89bf132a03afa0005a33"
+  branch = "tanya"
+  digest = "1:008428ed2d1a176f91c72ca3378177e499e7114bf34c208b7db06514e5fce70d"
   name = "github.com/nlopes/slack"
   packages = [
     ".",
@@ -28,7 +28,8 @@
     "slackutilsx",
   ]
   pruneopts = "UT"
-  revision = "e5749f13b5af3c139165ab4180a95bb06a60128b"
+  revision = "5127b80ba1efebde70e0fd1e9ad41ec85ae5729b"
+  source = "github.com/nolanlum/slack"
 
 [[projects]]
   digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
