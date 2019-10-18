@@ -48,8 +48,8 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 		{
 			name:   "generic vanilla URL",
 			fields: fields{},
-			text:   "Fork this cool github repo <http://github.com/nolanlum/tanya> xD",
-			want:   "Fork this cool github repo http://github.com/nolanlum/tanya xD",
+			text:   "Fork this cool github repo xD <http://github.com/nolanlum/tanya>",
+			want:   "Fork this cool github repo xD http://github.com/nolanlum/tanya",
 		},
 		{
 			name:   "URL detected by slack",
@@ -62,6 +62,12 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 			fields: fields{},
 			text:   "send cool pics of girls to <mailto:kedo@calanimagealpha.com|kedo@calanimagealpha.com> xD",
 			want:   "send cool pics of girls to kedo@calanimagealpha.com xD",
+		},
+		{
+			name:   "malformed",
+			fields: fields{},
+			text:   "le disconnect face <https://warosu.",
+			want:   "le disconnect face https://warosu.",
 		},
 	}
 	for _, tt := range tests {

@@ -63,8 +63,10 @@ func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonical
 		}
 
 		// Do it again I guess.
-		textParts = strings.SplitN(textParts[1], "<", 2)
-		parsedMessageBuilder.WriteString(textParts[0])
+		if len(textParts) > 1 {
+			textParts = strings.SplitN(textParts[1], "<", 2)
+			parsedMessageBuilder.WriteString(textParts[0])
+		}
 	}
 
 	return sc.slackURLDecoder.Replace(parsedMessageBuilder.String())
