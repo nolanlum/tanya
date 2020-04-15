@@ -240,7 +240,7 @@ func (sc *SlackClient) cleanupMappings() {
 	}
 	sc.Unlock()
 
-	for _, dmName := range nilUsers {
+	for _, dmName := range nilDms {
 		sc.Lock()
 		if sc.userInfo[dmName] == nil {
 			delete(sc.dmInfo, dmName)
