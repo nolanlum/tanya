@@ -158,6 +158,7 @@ func (sc *SlackClient) bootstrapMappings() {
 	sc.Unlock()
 
 	sc.regenerateReverseMappings()
+	sc.cleanupMappings()
 
 	log.Printf("%s slack:init channels:%v users:%v dms:%v memberships:%v time:%v", sc.Tag(),
 		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Since(startTime))
@@ -171,19 +172,84 @@ func (sc *SlackClient) regenerateReverseMappings() {
 
 	sc.nickToUserMap = make(map[string]string)
 	for _, user := range sc.userInfo {
+		if user == nil {
+			continue
+		}
 		sc.nickToUserMap[user.Nick] = user.SlackID
 	}
 
 	sc.channelNameToIDMap = make(map[string]string)
 	for _, channel := range sc.channelInfo {
+		if channel == nil {
+			continue
+		}
 		sc.channelNameToIDMap[channel.Name] = channel.SlackID
 	}
 
 	sc.userIDToDMIDMap = make(map[string]string)
 	for dmID, user := range sc.dmInfo {
+		if user == nil {
+			continue
+		}
 		sc.userIDToDMIDMap[user.SlackID] = dmID
 	}
 }
+
+// Clean up our mappings if necessary
+func (sc *SlackClient) cleanupMappings() {
+	nilChannels := make([]string, 0)
+	sc.Lock()
+	for channelName, channel := range sc.userInfo {
+		if channel == nil {
+			nilChannels = append(nilChannels, channelName)
+		}
+	}
+	sc.Unlock()
+
+	for _, channelName := range nilChannels {
+		sc.Lock()
+		if sc.userInfo[channelName] == nil {
+			delete(sc.userInfo, channelName)
+		}
+		sc.Unlock()
+	}
+
+	nilUsers := make([]string, 0)
+	sc.Lock()
+	for username, user := range sc.userInfo {
+		if user == nil {
+			nilUsers = append(nilUsers, username)
+		}
+	}
+	sc.Unlock()
+
+	for _, username := range nilUsers {
+		sc.Lock()
+		if sc.userInfo[username] == nil {
+			delete(sc.userInfo, username)
+		}
+		sc.Unlock()
+	}
+
+	nilDms := make([]string, 0)
+	sc.Lock()
+	for dmName, dmUser := range sc.dmInfo {
+		if dmUser == nil {
+			nilDms = append(nilDms, dmName)
+		}
+	}
+	sc.Unlock()
+
+	for _, dmName := range nilUsers {
+		sc.Lock()
+		if sc.userInfo[dmName] == nil {
+			delete(sc.dmInfo, dmName)
+		}
+		sc.Unlock()
+	}
+	
+}
+
 
 // ResolveUser takes a slackID and fetches a SlackUser for the ID
 func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
