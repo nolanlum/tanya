@@ -247,9 +247,8 @@ func (sc *SlackClient) cleanupMappings() {
 		}
 		sc.Unlock()
 	}
-	
-}
 
+}
 
 // ResolveUser takes a slackID and fetches a SlackUser for the ID
 func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
