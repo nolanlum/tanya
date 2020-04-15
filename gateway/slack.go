@@ -199,7 +199,7 @@ func (sc *SlackClient) regenerateReverseMappings() {
 func (sc *SlackClient) cleanupMappings() {
 	nilChannels := make([]string, 0)
 	sc.Lock()
-	for channelName, channel := range sc.userInfo {
+	for channelName, channel := range sc.channelInfo {
 		if channel == nil {
 			nilChannels = append(nilChannels, channelName)
 		}
