@@ -158,6 +158,7 @@ func (sc *SlackClient) bootstrapMappings() {
 	sc.Unlock()
 
 	sc.regenerateReverseMappings()
+	sc.cleanupMappings()
 
 	log.Printf("%s slack:init channels:%v users:%v dms:%v memberships:%v time:%v", sc.Tag(),
 		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Since(startTime))
@@ -171,17 +172,50 @@ func (sc *SlackClient) regenerateReverseMappings() {
 
 	sc.nickToUserMap = make(map[string]string)
 	for _, user := range sc.userInfo {
+		if user == nil {
+			continue
+		}
 		sc.nickToUserMap[user.Nick] = user.SlackID
 	}
 
 	sc.channelNameToIDMap = make(map[string]string)
 	for _, channel := range sc.channelInfo {
+		if channel == nil {
+			continue
+		}
 		sc.channelNameToIDMap[channel.Name] = channel.SlackID
 	}
 
 	sc.userIDToDMIDMap = make(map[string]string)
 	for dmID, user := range sc.dmInfo {
+		if user == nil {
+			continue
+		}
 		sc.userIDToDMIDMap[user.SlackID] = dmID
+	}
+}
+
+// Clean up our mappings if necessary
+func (sc *SlackClient) cleanupMappings() {
+	sc.Lock()
+	defer sc.Unlock()
+
+	for channelName, channel := range sc.channelInfo {
+		if channel == nil {
+			delete(sc.userInfo, channelName)
+		}
+	}
+
+	for username, user := range sc.userInfo {
+		if user == nil {
+			delete(sc.userInfo, username)
+		}
+	}
+
+	for dmName, dmUser := range sc.dmInfo {
+		if dmUser == nil {
+			delete(sc.dmInfo, dmName)
+		}
 	}
 }
 
