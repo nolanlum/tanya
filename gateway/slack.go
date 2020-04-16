@@ -197,57 +197,26 @@ func (sc *SlackClient) regenerateReverseMappings() {
 
 // Clean up our mappings if necessary
 func (sc *SlackClient) cleanupMappings() {
-	nilChannels := make([]string, 0)
 	sc.Lock()
+	defer sc.Unlock()
+
 	for channelName, channel := range sc.channelInfo {
 		if channel == nil {
-			nilChannels = append(nilChannels, channelName)
-		}
-	}
-	sc.Unlock()
-
-	for _, channelName := range nilChannels {
-		sc.Lock()
-		if sc.userInfo[channelName] == nil {
 			delete(sc.userInfo, channelName)
 		}
-		sc.Unlock()
 	}
 
-	nilUsers := make([]string, 0)
-	sc.Lock()
 	for username, user := range sc.userInfo {
 		if user == nil {
-			nilUsers = append(nilUsers, username)
-		}
-	}
-	sc.Unlock()
-
-	for _, username := range nilUsers {
-		sc.Lock()
-		if sc.userInfo[username] == nil {
 			delete(sc.userInfo, username)
 		}
-		sc.Unlock()
 	}
 
-	nilDms := make([]string, 0)
-	sc.Lock()
 	for dmName, dmUser := range sc.dmInfo {
 		if dmUser == nil {
-			nilDms = append(nilDms, dmName)
-		}
-	}
-	sc.Unlock()
-
-	for _, dmName := range nilDms {
-		sc.Lock()
-		if sc.dmInfo[dmName] == nil {
 			delete(sc.dmInfo, dmName)
 		}
-		sc.Unlock()
 	}
-
 }
 
 // ResolveUser takes a slackID and fetches a SlackUser for the ID
