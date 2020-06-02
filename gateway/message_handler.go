@@ -68,30 +68,6 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 	}
 
 	switch messageData.SubType {
-	case "file_mention":
-		if messageData.User == sc.self.SlackID {
-			// Eat the "helpful" messages Slack sends when you send a link to a Slack upload.
-			return
-		}
-		fallthrough
-	case "file_share":
-		if sender == nil || target == "" {
-			return
-		}
-
-		// Slack "abuses" the display/canonical URL feature of its markdown for file upload messages,
-		// so we need to keep them.
-		messageText := sc.ParseMessageTextWithOptions(messageData.Text, true)
-
-		// If we had swapped senders earlier, make sure the message reflects this swap
-		if wasSenderSwapped {
-			messageText = "[" + sc.self.Nick + "] " + messageText
-		}
-
-		for _, messageEvent := range messageTextToEvents(sender, target, messageText) {
-			incomingChan <- messageEvent
-		}
-
 	case "", "pinned_item", "thread_broadcast":
 		if sender == nil || target == "" {
 			return
@@ -115,12 +91,16 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			incomingChan <- messageEvent
 		}
 
-		// Handle file uploads
+		// Handle message file attachments
+		verb := "shared"
 		if messageData.Upload {
-			for _, file := range messageData.Files {
-				incomingChan <- newSlackMessageEvent(
-					sender, target, fmt.Sprintf("@%s uploaded a file: %s %s", sender.Nick, file.Name, file.URLPrivate))
-			}
+			verb = "uploaded"
+		}
+
+		for _, file := range messageData.Files {
+			incomingChan <- newSlackMessageEvent(
+				sender, target, fmt.Sprintf("@%s %s a file: %s %s",
+					sender.Nick, verb, file.Name, file.URLPrivate))
 		}
 
 	case "bot_message":
