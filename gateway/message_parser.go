@@ -15,7 +15,7 @@ func (sc *SlackClient) ParseMessageText(text string) string {
 
 // ParseMessageTextWithOptions takes raw Slack message payload, resolves the
 // user and channel references, and optionally preserves the Slack canonical URL.
-func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonicalURL bool) string {
+func (sc *SlackClient) ParseMessageTextWithOptions(text string, alwaysIncludeLinkHref bool) string {
 	parsedMessageBuilder := strings.Builder{}
 
 	// Find the first '<' if any, split into "before" and "after"
@@ -54,11 +54,22 @@ func (sc *SlackClient) ParseMessageTextWithOptions(text string, includeCanonical
 
 		default:
 			// A URL, we usually only care about the "display" portion that was actually sent.
-			displayIdx := strings.Index(ref, "|")
-			parsedMessageBuilder.WriteString(ref[displayIdx+1:])
-			if includeCanonicalURL && displayIdx > 0 {
-				parsedMessageBuilder.WriteByte(' ')
-				parsedMessageBuilder.WriteString(ref[0:displayIdx])
+			urlParts := strings.SplitN(ref, "|", 2)
+			if len(urlParts) == 1 {
+				parsedMessageBuilder.WriteString(urlParts[0])
+			} else {
+				href, linkText := urlParts[0], urlParts[1]
+				parsedMessageBuilder.WriteString(linkText)
+
+				// For now, the only non-URL link href supported by Slack is mailto?
+				hrefIsUrl := !strings.HasPrefix(href, "mailto:")
+				shouldEmitHref := alwaysIncludeLinkHref || (hrefIsUrl && linkText != href)
+				if shouldEmitHref {
+					parsedMessageBuilder.WriteByte(' ')
+					parsedMessageBuilder.WriteByte('(')
+					parsedMessageBuilder.WriteString(href)
+					parsedMessageBuilder.WriteByte(')')
+				}
 			}
 		}
 

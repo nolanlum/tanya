@@ -55,7 +55,19 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 			name:   "URL detected by slack",
 			fields: fields{},
 			text:   "Fork this cool github repo <http://github.com/nolanlum/tanya|github.com/nolanlum/tanya> xD",
-			want:   "Fork this cool github repo github.com/nolanlum/tanya xD",
+			want:   "Fork this cool github repo github.com/nolanlum/tanya (http://github.com/nolanlum/tanya) xD",
+		},
+		{
+			name:   "manually formatted URL",
+			fields: fields{},
+			text:   "Fork this <http://github.com/nolanlum/tanya|cool github repo> xD",
+			want:   "Fork this cool github repo (http://github.com/nolanlum/tanya) xD",
+		},
+		{
+			name:   "manually formatted URL with identical text and href",
+			fields: fields{},
+			text:   "wow no generics? <https://golang.org|https://golang.org>",
+			want:   "wow no generics? https://golang.org",
 		},
 		{
 			name:   "mailto",
@@ -102,10 +114,10 @@ func TestSlackClient_ParseMessageTextWithOptions(t *testing.T) {
 			name:   "URL detected by slack",
 			fields: fields{},
 			params: params{
-				text:                "Fork this cool github repo <http://github.com/nolanlum/tanya|github.com/nolanlum/tanya> xD",
+				text:                "Fork this cool github repo <http://github.com/nolanlum/tanya|http://github.com/nolanlum/tanya> xD",
 				includeCanonicalURL: true,
 			},
-			want: "Fork this cool github repo github.com/nolanlum/tanya http://github.com/nolanlum/tanya xD",
+			want: "Fork this cool github repo http://github.com/nolanlum/tanya (http://github.com/nolanlum/tanya) xD",
 		},
 	}
 	for _, tt := range tests {
