@@ -585,7 +585,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				chans.IncomingChan <- partEvent
 
 			case "channel_marked", "group_marked", "thread_marked", "im_marked", "im_open",
-				"latency_report", "user_typing", "pref_change", "dnd_updated_user",
+				"latency_report", "user_typing", "pref_change", "dnd_updated_user", "desktop_notification",
 				"file_created", "file_public",
 				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
 				// haha nobody cares about this
