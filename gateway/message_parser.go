@@ -62,8 +62,8 @@ func (sc *SlackClient) ParseMessageTextWithOptions(text string, alwaysIncludeLin
 				parsedMessageBuilder.WriteString(linkText)
 
 				// For now, the only non-URL link href supported by Slack is mailto?
-				hrefIsUrl := !strings.HasPrefix(href, "mailto:")
-				shouldEmitHref := alwaysIncludeLinkHref || (hrefIsUrl && linkText != href)
+				hrefIsURL := !strings.HasPrefix(href, "mailto:")
+				shouldEmitHref := alwaysIncludeLinkHref || (hrefIsURL && linkText != href)
 				if shouldEmitHref {
 					parsedMessageBuilder.WriteByte(' ')
 					parsedMessageBuilder.WriteByte('(')
