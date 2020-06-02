@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 var slackFakeUser = &SlackUser{Nick: "SLACK", SlackID: "SLACK"}

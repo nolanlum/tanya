@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 // ConversationMarker handles coordination and de-duplication of marking conversations as read

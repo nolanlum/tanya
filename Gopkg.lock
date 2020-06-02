@@ -18,9 +18,17 @@
   version = "v1.4.1"
 
 [[projects]]
+  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
+
+[[projects]]
   branch = "master"
-  digest = "1:086e1b80bd317631e6d875dc040f246e668b63f93e76596c3ba135e21f9665bb"
-  name = "github.com/nlopes/slack"
+  digest = "1:cc7b196c5653d7af2afd96c3368da98082dec0b90ff69a70dda0a3e6cd14d143"
+  name = "github.com/slack-go/slack"
   packages = [
     ".",
     "internal/errorsx",
@@ -28,15 +36,7 @@
     "slackutilsx",
   ]
   pruneopts = "UT"
-  revision = "d06c2a2b3249b44a9c5dee8485f5a87497beb9ea"
-
-[[projects]]
-  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
-  name = "github.com/pkg/errors"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
-  version = "v0.8.1"
+  revision = "625ac52a326e62fd8409197a8fba909d2386cfd4"
 
 [[projects]]
   branch = "master"
@@ -62,7 +62,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/BurntSushi/toml",
-    "github.com/nlopes/slack",
+    "github.com/slack-go/slack",
     "golang.org/x/crypto/ssh/terminal",
   ]
   solver-name = "gps-cdcl"

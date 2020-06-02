@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 // SlackChannel holds data for a channel on Slack

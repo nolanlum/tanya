@@ -10,7 +10,7 @@ import "io/ioutil"
 import "net/http"
 import "net/url"
 
-import "github.com/nlopes/slack"
+import "github.com/slack-go/slack"
 import "golang.org/x/crypto/ssh/terminal"
 
 type findTeamResponseFull struct {

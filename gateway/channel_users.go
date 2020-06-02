@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 )
 
 // getChannelUsersFromAPI queries the Slack API for a list of users in the given channel, returning
