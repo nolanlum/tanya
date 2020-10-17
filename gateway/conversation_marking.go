@@ -24,6 +24,15 @@ func NewConversationMarker() *ConversationMarker {
 	}
 }
 
+// Reset clears any pending conversation mark events.
+func (cm *ConversationMarker) Reset() {
+	cm.Lock()
+	defer cm.Unlock()
+
+	cm.rtmIDToMarkFuncMap = make(map[int]func(string))
+	cm.conversationToReadCursorMap = make(map[string]string)
+}
+
 func (cm *ConversationMarker) markConversation(conversationID, timestamp string, mark func(string, string) error) {
 	cm.conversationToReadCursorMap[conversationID] = timestamp
 
