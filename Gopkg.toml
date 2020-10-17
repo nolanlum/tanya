@@ -26,7 +26,8 @@
 
 [[override]]
   name = "github.com/slack-go/slack"
-  branch = "master"
+  source = "github.com/nolanlum/slack"
+  branch = "tanya"
 
 [prune]
   go-tests = true

@@ -10,24 +10,24 @@
   version = "v0.3.1"
 
 [[projects]]
-  digest = "1:e62657cca9badaa308d86e7716083e4c5933bb78e30a17743fc67f50be26f6f4"
+  digest = "1:6d29f02f0f01c627c2be40fb7347669a9ff2aa215cb97747294c1d13ffa74bdd"
   name = "github.com/gorilla/websocket"
   packages = ["."]
   pruneopts = "UT"
-  revision = "c3e18be99d19e6b3e8f1559eea2c161a665c4b6b"
-  version = "v1.4.1"
+  revision = "b65e62901fc1c0d968042419e74789f6af455eb9"
+  version = "v1.4.2"
 
 [[projects]]
-  digest = "1:cf31692c14422fa27c83a05292eb5cbe0fb2775972e8f1f8446a71549bd8980b"
+  digest = "1:9e1d37b58d17113ec3cb5608ac0382313c5b59470b94ed97d0976e69c7022314"
   name = "github.com/pkg/errors"
   packages = ["."]
   pruneopts = "UT"
-  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
-  version = "v0.8.1"
+  revision = "614d223910a179a466c1767a985424175c39b465"
+  version = "v0.9.1"
 
 [[projects]]
-  branch = "master"
-  digest = "1:cc7b196c5653d7af2afd96c3368da98082dec0b90ff69a70dda0a3e6cd14d143"
+  branch = "tanya"
+  digest = "1:f1b9fd9dc2f041e0f5dc0861522958c3530dca3ea57125d8f92406de27636d63"
   name = "github.com/slack-go/slack"
   packages = [
     ".",
@@ -36,26 +36,28 @@
     "slackutilsx",
   ]
   pruneopts = "UT"
-  revision = "625ac52a326e62fd8409197a8fba909d2386cfd4"
+  revision = "a2ea66297bf08c07478ba6739472dda0dea21cbf"
+  source = "github.com/nolanlum/slack"
 
 [[projects]]
   branch = "master"
-  digest = "1:bbe51412d9915d64ffaa96b51d409e070665efc5194fcf145c4a27d4133107a4"
+  digest = "1:c381e2867d447cca3e74dbfb0c8ed371a4583c694b35838c5c642a2b79480fc6"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
   pruneopts = "UT"
-  revision = "34f69633bfdcf9db92f698f8487115767eebef81"
+  revision = "9e8e0b390897c84cad53ebe9ed2d1d331a5394d9"
 
 [[projects]]
   branch = "master"
-  digest = "1:66da9400d3f58a196e86efa1b0c8ea0b1aae330a6ec234b26ad27ba42f74f019"
+  digest = "1:033bc01efbda65141b8c7281e6d0c61b68bcf46d6f4f1ea8bb0686394278fc69"
   name = "golang.org/x/sys"
   packages = [
+    "internal/unsafeheader",
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "543471e840be449c53d44b32c7adf1261ad67e37"
+  revision = "b09fb700fbb73bb06b1863b5741a67ef6dbfa433"
 
 [solve-meta]
   analyzer-name = "dep"
