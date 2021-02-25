@@ -2,16 +2,16 @@ package token
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"syscall"
-)
-import "errors"
-import "fmt"
-import "io/ioutil"
-import "net/http"
-import "net/url"
 
-import "github.com/slack-go/slack"
-import "golang.org/x/term"
+	"github.com/slack-go/slack"
+	"golang.org/x/term"
+)
 
 type findTeamResponseFull struct {
 	SSO    bool   `json:"sso"`

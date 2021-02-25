@@ -164,9 +164,9 @@ func (sc *SlackClient) bootstrapMappings() {
 	}
 
 	ucParams := &slack.GetConversationsParameters{
-		Cursor: "",
-		Types: []string{"im"},
-		Limit: 0,
+		Cursor:          "",
+		Types:           []string{"im"},
+		Limit:           0,
 		ExcludeArchived: "true",
 	}
 	ims, _, err := sc.client.GetConversations(ucParams)
@@ -344,8 +344,8 @@ func (sc *SlackClient) ResolveUserToDM(user *SlackUser) (string, error) {
 
 	ocp := &slack.OpenConversationParameters{
 		ChannelID: user.SlackID,
-		ReturnIM: true,
-		Users: []string{user.SlackID},
+		ReturnIM:  true,
+		Users:     []string{user.SlackID},
 	}
 	channel, _, _, err := sc.client.OpenConversation(ocp)
 	if err != nil {
@@ -373,9 +373,9 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 
 	slackUser = nil
 	ucParams := &slack.GetConversationsParameters{
-		Cursor: "",
-		Types: []string{"im"},
-		Limit: 0,
+		Cursor:          "",
+		Types:           []string{"im"},
+		Limit:           0,
 		ExcludeArchived: "true",
 	}
 	ims, _, err := sc.client.GetConversations(ucParams)
