@@ -11,7 +11,7 @@ import "net/http"
 import "net/url"
 
 import "github.com/slack-go/slack"
-import "golang.org/x/crypto/ssh/terminal"
+import "golang.org/x/term"
 
 type findTeamResponseFull struct {
 	SSO    bool   `json:"sso"`
@@ -56,7 +56,7 @@ func GetSlackToken() (string, error) {
 	fmt.Scanln(&email)
 
 	fmt.Print("Slack password: ")
-	passwordBytes, _ := terminal.ReadPassword(int(syscall.Stdin))
+	passwordBytes, _ := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println("")
 
 	password := string(passwordBytes)

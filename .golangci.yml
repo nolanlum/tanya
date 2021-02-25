@@ -10,6 +10,4 @@ linters:
     - ineffassign
     - staticcheck
     - structcheck
-    - interfacer
     - misspell
-    - unconvert
