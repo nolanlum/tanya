@@ -1,0 +1,4 @@
+[submodule "vendor/slack"]
+	path = vendor/slack
+	url = https://github.com/nolanlum/slack
+	branch = tanya
