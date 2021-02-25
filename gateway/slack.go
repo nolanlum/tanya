@@ -3,6 +3,7 @@ package gateway
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -55,6 +56,26 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	}
 }
 
+type inflightMessage struct {
+	MessageText        string
+	DestinationSlackID string
+	InitialMessageID   int
+
+	RetriesRemaining int
+	RetryInterval    time.Duration
+}
+
+func newInflightMessage(msg string, destinationSlackID string, initialMessageID int) *inflightMessage {
+	return &inflightMessage{
+		MessageText:        msg,
+		DestinationSlackID: destinationSlackID,
+		InitialMessageID:   initialMessageID,
+
+		RetriesRemaining: 3,
+		RetryInterval:    time.Second + (time.Duration(rand.Intn(1000)) * time.Millisecond),
+	}
+}
+
 // SlackClient holds information for the websockets conn to Slack
 type SlackClient struct {
 	client *slack.Client
@@ -71,6 +92,7 @@ type SlackClient struct {
 	channelNameToIDMap map[string]string
 	userIDToDMIDMap    map[string]string
 
+	inflightMessageMap map[int]*inflightMessage
 	slackURLEncoder    *strings.Replacer
 	slackURLDecoder    *strings.Replacer
 	conversationMarker *ConversationMarker
@@ -161,8 +183,10 @@ func (sc *SlackClient) bootstrapMappings() {
 	sc.dmInfo = dmInfo
 	sc.channelMemberships = channelMemberships
 	sc.channelMembers = make(map[string]map[string]*SlackUser)
+	sc.inflightMessageMap = make(map[int]*inflightMessage)
 	sc.Unlock()
 
+	sc.conversationMarker.Reset()
 	sc.regenerateReverseMappings()
 	sc.cleanupMappings()
 
@@ -422,6 +446,7 @@ func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
 		sc.conversationMarker.MarkChannel(sc.client, channel.SlackID, outgoingMessage.ID)
 	}
 
+	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, channel.SlackID, outgoingMessage.ID)
 	sc.rtm.SendMessage(outgoingMessage)
 	return nil
 }
@@ -436,8 +461,23 @@ func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
 	msg = sc.UnparseMessageText(msg)
 	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, imChannelID)
 	sc.conversationMarker.MarkDM(sc.client, imChannelID, outgoingMessage.ID)
+	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, imChannelID, outgoingMessage.ID)
 	sc.rtm.SendMessage(outgoingMessage)
 	return nil
+}
+
+func (sc *SlackClient) retryInflightMessage(msg *inflightMessage) {
+	// Process retry backoff.
+	time.Sleep(msg.RetryInterval)
+	msg.RetriesRemaining -= 1
+	msg.RetryInterval = 2*msg.RetryInterval.Truncate(time.Second) + time.Duration(rand.Intn(1000))*time.Millisecond
+
+	// Create new RTM outgoing message and add to tracking map.
+	outgoingMessage := sc.rtm.NewOutgoingMessage(msg.MessageText, msg.DestinationSlackID)
+	sc.inflightMessageMap[outgoingMessage.ID] = msg
+
+	// Send.
+	sc.rtm.SendMessage(outgoingMessage)
 }
 
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
@@ -608,10 +648,28 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
 				// haha nobody cares about this
 
+			case "ack_error":
+				ackError := event.Data.(*slack.AckErrorEvent)
+				if inflightMessage, found := sc.inflightMessageMap[ackError.ReplyTo]; found {
+					delete(sc.inflightMessageMap, ackError.ReplyTo)
+					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf(
+						"failed to send message [%v], retry in %ds: %v",
+						inflightMessage.MessageText,
+						inflightMessage.RetryInterval.Truncate(time.Second)/time.Second,
+						ackError.Error(),
+					))
+					go sc.retryInflightMessage(inflightMessage)
+				}
+
 			case "ack":
 				// maybe we care about this
 				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
-					sc.conversationMarker.HandleRTMAck(ack.ReplyTo, ack.Timestamp)
+					if inflightMessage, found := sc.inflightMessageMap[ack.ReplyTo]; found {
+						delete(sc.inflightMessageMap, ack.ReplyTo)
+						sc.conversationMarker.HandleRTMAck(inflightMessage.InitialMessageID, ack.Timestamp)
+					} else {
+						sc.conversationMarker.HandleRTMAck(ack.ReplyTo, ack.Timestamp)
+					}
 					continue
 				}
 				fallthrough

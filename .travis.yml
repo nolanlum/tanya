@@ -1,25 +1,15 @@
 language: go
 go:
-- '1.10'
-env:
-- GOMETALINTER_VER=2.0.5
-before_script:
-- pushd $HOME
-- wget https://github.com/alecthomas/gometalinter/releases/download/v${GOMETALINTER_VER}/gometalinter-${GOMETALINTER_VER}-linux-amd64.tar.gz
-- tar -xzvf gometalinter-${GOMETALINTER_VER}-linux-amd64.tar.gz
-- popd
-- PATH=$HOME/gometalinter-${GOMETALINTER_VER}-linux-amd64:$PATH
+- '1.16'
 script:
 - go build -v
 - go test -v -race ./...
-- gometalinter --disable-all --vendor --enable=goimports --enable=gofmt --enable=vet
-  --enable=vetshadow --enable=golint --enable=ineffassign --enable=megacheck ./...
 deploy:
   provider: releases
   api_key:
     secure: QMIOGmhEItn3hroZ7egd5qCeP59Z2lUScUbhi7SAE7KJbE8rFohtOWnO8xKpjERwf+aDHBm9GaI2YfLtRW80JWk4UT632cREkxNdFmIF6ElrToG3N0uoazMsu4i7DWLJqvW7xtNCmZyw89ajb89UOo7aBIdjyrmqKEgwsX06wuY8OtZoSJf+fTmYu7kaZ7l69Lx3WsBXZOlHhNq82Lv9FsWwRmIT2Y9p0L6lMV418yCrpelrLLzJTTJogyBRbr1VfLbmfBLYnmZBML6D/QW/IgZR6kj8vPBBeYlxAWvo3/r3HNQa3Z1V6sK2GoilQA9ofkgNQbiilztQkq4ztX3tOfb9PGvW9QQGugRHfXwu4IQ7wiNQECe12aakhb90KKRfFhiAzAYBfOTdRwwc/C5+I9t6kbQ32P0xz0+1mYtBGZVgmnQ1LOwKrcnIlMkhD/tFU4j4ndMhzpFbzKU1HE8Dyl8MVuZqd2018lIxIMHiCxeONaa/r+e2/8m0Idaj4VikvJsYj2UxYsddzaEJWWBjZwSivXPDN0OURwPDDjyDtbFlUtHPLXJpDM+43ECFWsIIGCkvfbRc6asGG/oIVhbQJUApHVf86+0DtH8m9mLXP4iRX7BXda7u3t8uncHnw/wxuEYtrCAP9LCf9aE6iJ4/DT5i5hbXnvG1RmuEDo2YkSE=
   file: tanya
-  skip_cleanup: true
+  cleanup: false
   on:
     repo: nolanlum/tanya
     tags: true
