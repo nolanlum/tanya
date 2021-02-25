@@ -17,4 +17,7 @@
 # IDE plebs go here
 .idea
 
+# In 2021 we ignore vendor
+/vendor/
+
 config.toml
