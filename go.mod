@@ -8,4 +8,4 @@ require (
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83
 )
 
-replace github.com/slack-go/slack => ./vendor/slack
+replace github.com/slack-go/slack => github.com/nolanlum/slack v0.2.1-0.20210225003417-b0474e47058a
