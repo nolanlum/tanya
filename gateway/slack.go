@@ -141,7 +141,13 @@ func (sc *SlackClient) bootstrapMappings() {
 		userInfo[user.ID] = slackUserFromDto(&user)
 	}
 
-	ims, err := sc.client.GetIMChannels()
+	ucParams := &slack.GetConversationsParameters{
+		Cursor: "",
+		Types: []string{"im"},
+		Limit: 0,
+		ExcludeArchived: "true",
+	}
+	ims, _, err := sc.client.GetConversations(ucParams)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -312,10 +318,16 @@ func (sc *SlackClient) ResolveUserToDM(user *SlackUser) (string, error) {
 		return dmID, nil
 	}
 
-	_, _, dmID, err := sc.client.OpenIMChannel(user.SlackID)
+	ocp := &slack.OpenConversationParameters{
+		ChannelID: user.SlackID,
+		ReturnIM: true,
+		Users: []string{user.SlackID},
+	}
+	channel, _, _, err := sc.client.OpenConversation(ocp)
 	if err != nil {
 		return "", err
 	}
+	dmID = channel.ID
 
 	sc.Lock()
 	sc.dmInfo[dmID] = user
@@ -336,7 +348,13 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 	}
 
 	slackUser = nil
-	ims, err := sc.client.GetIMChannels()
+	ucParams := &slack.GetConversationsParameters{
+		Cursor: "",
+		Types: []string{"im"},
+		Limit: 0,
+		ExcludeArchived: "true",
+	}
+	ims, _, err := sc.client.GetConversations(ucParams)
 	if err != nil {
 		return nil, err
 	}
