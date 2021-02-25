@@ -1,8 +1,6 @@
 language: go
 go:
 - '1.16'
-git:
-  submodules: true
 script:
 - go build -v
 - go test -v -race ./...
