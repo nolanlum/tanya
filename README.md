@@ -1,4 +1,4 @@
-# tanya [![Build Status](https://travis-ci.org/nolanlum/tanya.svg?branch=master)](https://travis-ci.org/nolanlum/tanya)
+# tanya [![Go](https://github.com/nolanlum/tanya/actions/workflows/go.yml/badge.svg)](https://github.com/nolanlum/tanya/actions/workflows/go.yml)
 slack irc gateway in a world with no generics
 
 ## Running tanya
