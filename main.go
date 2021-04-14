@@ -226,7 +226,7 @@ Loop:
 
 func launchGateway(conf *GatewayInstance, stopChan chan interface{}) {
 	slackIncomingChan := make(chan *gateway.SlackEvent)
-	slackClient := gateway.NewSlackClient()
+	slackClient := gateway.NewSlackClient(conf.Slack.ThreadQuoteIntervalSec)
 	slackClient.Initialize(conf.Slack.Token, *debugFlag)
 
 	go slackClient.Poop(&gateway.ClientChans{
