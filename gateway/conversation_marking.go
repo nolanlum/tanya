@@ -33,21 +33,23 @@ func (cm *ConversationMarker) Reset() {
 	cm.conversationToReadCursorMap = make(map[string]string)
 }
 
-func (cm *ConversationMarker) markConversation(conversationID, timestamp string, mark func(string, string) error) {
-	cm.conversationToReadCursorMap[conversationID] = timestamp
+func (cm *ConversationMarker) markConversationFunc(sc *slack.Client, conversationID string) func(string) {
+	return func(timestamp string) {
+		cm.conversationToReadCursorMap[conversationID] = timestamp
 
-	go func() {
-		time.Sleep(5 * time.Second)
+		go func() {
+			time.Sleep(5 * time.Second)
 
-		cm.Lock()
-		defer cm.Unlock()
-		if cm.conversationToReadCursorMap[conversationID] == timestamp {
-			err := mark(conversationID, timestamp)
-			if err != nil {
-				log.Printf("error while marking conversation %v: %v", conversationID, err)
+			cm.Lock()
+			defer cm.Unlock()
+			if cm.conversationToReadCursorMap[conversationID] == timestamp {
+				err := sc.MarkConversation(conversationID, timestamp)
+				if err != nil {
+					log.Printf("error while marking conversation %v: %v", conversationID, err)
+				}
 			}
-		}
-	}()
+		}()
+	}
 }
 
 // HandleRTMAck handles an ACK from the RTM channel, scheduling a read marker update if possible
@@ -62,32 +64,10 @@ func (cm *ConversationMarker) HandleRTMAck(messageID int, timestamp string) {
 	}
 }
 
-// MarkChannel prepares a channel marker to be updated upon receipt of an ack for the given message ID
-func (cm *ConversationMarker) MarkChannel(sc *slack.Client, channelID string, messageID int) {
+// MarkConversation prepares a conversation marker to be updated upon receipt of an ack for the given message ID
+func (cm *ConversationMarker) MarkConversation(sc *slack.Client, conversationID string, messageID int) {
 	cm.Lock()
 	defer cm.Unlock()
 
-	cm.rtmIDToMarkFuncMap[messageID] = func(timestamp string) {
-		cm.markConversation(channelID, timestamp, sc.SetChannelReadMark)
-	}
-}
-
-// MarkGroup prepares a group (private channel) marker to be updated upon receipt of an ack for the given message ID
-func (cm *ConversationMarker) MarkGroup(sc *slack.Client, groupID string, messageID int) {
-	cm.Lock()
-	defer cm.Unlock()
-
-	cm.rtmIDToMarkFuncMap[messageID] = func(timestamp string) {
-		cm.markConversation(groupID, timestamp, sc.SetGroupReadMark)
-	}
-}
-
-// MarkDM prepares a DM marker to be updated upon receipt of an ack for the given message ID
-func (cm *ConversationMarker) MarkDM(sc *slack.Client, dmID string, messageID int) {
-	cm.Lock()
-	defer cm.Unlock()
-
-	cm.rtmIDToMarkFuncMap[messageID] = func(timestamp string) {
-		cm.markConversation(dmID, timestamp, sc.MarkIMChannel)
-	}
+	cm.rtmIDToMarkFuncMap[messageID] = cm.markConversationFunc(sc, conversationID)
 }

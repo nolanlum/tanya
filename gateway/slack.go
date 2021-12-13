@@ -131,7 +131,7 @@ func (sc *SlackClient) bootstrapMappings() {
 
 	hasMore := true
 	gcp := &slack.GetConversationsParameters{
-		ExcludeArchived: "true",
+		ExcludeArchived: true,
 		Limit:           1000,
 		Types:           []string{"public_channel", "private_channel"},
 	}
@@ -140,7 +140,7 @@ func (sc *SlackClient) bootstrapMappings() {
 		var err error
 		channels, gcp.Cursor, err = sc.client.GetConversations(gcp)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
 		}
 
 		for _, channel := range channels {
@@ -157,7 +157,7 @@ func (sc *SlackClient) bootstrapMappings() {
 
 	users, err := sc.client.GetUsers()
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetUsers", err)
 	}
 	for _, user := range users {
 		userInfo[user.ID] = slackUserFromDto(&user)
@@ -167,11 +167,11 @@ func (sc *SlackClient) bootstrapMappings() {
 		Cursor:          "",
 		Types:           []string{"im"},
 		Limit:           0,
-		ExcludeArchived: "true",
+		ExcludeArchived: true,
 	}
 	ims, _, err := sc.client.GetConversations(ucParams)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
 	}
 	for _, im := range ims {
 		dmInfo[im.ID] = userInfo[im.User]
@@ -376,7 +376,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 		Cursor:          "",
 		Types:           []string{"im"},
 		Limit:           0,
-		ExcludeArchived: "true",
+		ExcludeArchived: true,
 	}
 	ims, _, err := sc.client.GetConversations(ucParams)
 	if err != nil {
@@ -439,13 +439,7 @@ func (sc *SlackClient) Initialize(token string, debug bool) {
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
 	msg = sc.UnparseMessageText(msg)
 	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, channel.SlackID)
-
-	if channel.Private {
-		sc.conversationMarker.MarkGroup(sc.client, channel.SlackID, outgoingMessage.ID)
-	} else {
-		sc.conversationMarker.MarkChannel(sc.client, channel.SlackID, outgoingMessage.ID)
-	}
-
+	sc.conversationMarker.MarkConversation(sc.client, channel.SlackID, outgoingMessage.ID)
 	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, channel.SlackID, outgoingMessage.ID)
 	sc.rtm.SendMessage(outgoingMessage)
 	return nil
@@ -460,7 +454,7 @@ func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
 
 	msg = sc.UnparseMessageText(msg)
 	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, imChannelID)
-	sc.conversationMarker.MarkDM(sc.client, imChannelID, outgoingMessage.ID)
+	sc.conversationMarker.MarkConversation(sc.client, imChannelID, outgoingMessage.ID)
 	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, imChannelID, outgoingMessage.ID)
 	sc.rtm.SendMessage(outgoingMessage)
 	return nil
