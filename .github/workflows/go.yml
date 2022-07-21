@@ -10,13 +10,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v2.5.1
+    - name: Set up Go
+      uses: actions/setup-go@v3
       with:
-        version: v1.37.1
+        go-version: 1.18
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -29,19 +31,19 @@ jobs:
         - os: macos-latest
           outfile: tanya_macOS
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules: true
     - name: Set up Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.16
+        go-version: 1.18
     - name: Build
       run: go build -v -o ${{ matrix.outfile }}
     - name: Test
       run: go test -v -race ./...
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: tanya-binaries
         path: ${{ matrix.outfile }}
@@ -52,7 +54,7 @@ jobs:
     steps:
     - name: Download binary artifacts
       id: download
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: tanya-binaries
     - name: Upload release assets
