@@ -235,6 +235,20 @@ SelectLoop:
 				for _, m := range WholistAsNumerics(users, channelName, cc.config.ServerName) {
 					cc.outgoingMessages <- cc.reply(*m)
 				}
+
+			case WhoisCmd:
+				whoisNick := msg.Params[0]
+				whoisUser := cc.stateProvider.GetUserFromNick(whoisNick)
+
+				// Check for zero value, reply with no such user in that case.
+				if whoisUser.Nick == "" {
+					cc.outgoingMessages <- cc.reply(*ErrNoSuchNick(whoisNick))
+					continue
+				}
+
+				for _, m := range WhoisAsNumerics(whoisUser) {
+					cc.outgoingMessages <- cc.reply(*m)
+				}
 			}
 
 		}
