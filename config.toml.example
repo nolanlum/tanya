@@ -12,6 +12,8 @@
     [gateway.slack]
     # Slack client token
     token = ""
+    # Slack client cookie (d)
+    cookie = ""
 
 # Multiple gateway sections can be specified for multiple workspaces
 [[gateway]]

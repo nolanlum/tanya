@@ -227,7 +227,7 @@ Loop:
 func launchGateway(conf *GatewayInstance, stopChan chan interface{}) {
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
-	slackClient.Initialize(conf.Slack.Token, *debugFlag)
+	slackClient.Initialize(conf.Slack.Token, conf.Slack.Cookie, *debugFlag)
 
 	go slackClient.Poop(&gateway.ClientChans{
 		IncomingChan: slackIncomingChan,

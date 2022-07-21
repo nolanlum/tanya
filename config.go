@@ -11,7 +11,8 @@ import (
 )
 
 type slack struct {
-	Token string
+	Token  string
+	Cookie string
 }
 
 // Config holds configuration data for Tanya

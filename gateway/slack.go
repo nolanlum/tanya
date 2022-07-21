@@ -423,15 +423,20 @@ type ClientChans struct {
 	StopChan     <-chan interface{}
 }
 
-// Initialize bootstraps the SlackClient with a client token
-func (sc *SlackClient) Initialize(token string, debug bool) {
+// Initialize bootstraps the SlackClient with a client token, and optionally a cookie.
+func (sc *SlackClient) Initialize(token, cookie string, debug bool) {
+	slackOptions := []slack.Option{}
 	if debug {
-		sc.client = slack.New(
-			token, slack.OptionDebug(true), slack.OptionLog(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)))
-	} else {
-		sc.client = slack.New(token)
+		slackOptions = append(slackOptions,
+			slack.OptionDebug(true),
+			slack.OptionLog(log.New(os.Stdout, "", log.LstdFlags|log.Lshortfile)),
+		)
+	}
+	if cookie != "" {
+		slackOptions = append(slackOptions, slack.OptionAuthCookie(cookie))
 	}
 
+	sc.client = slack.New(token, slackOptions...)
 	sc.rtm = sc.client.NewRTM()
 }
 
