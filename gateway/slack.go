@@ -134,6 +134,7 @@ func (sc *SlackClient) getConversations(gcp *slack.GetConversationsParameters) (
 				ok = false
 				break
 			}
+			log.Printf("%s slack:getconversations ratelimit wait for %s seconds", sc.Tag(), rateLimitErr.RetryAfter.String())
 			time.Sleep(rateLimitErr.RetryAfter)
 			continue
 		}
