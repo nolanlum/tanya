@@ -113,3 +113,13 @@ func TestMessageToStringNoPrefix(t *testing.T) {
 		)
 	}
 }
+
+func TestStringToMessageWhois(t *testing.T) {
+	msg, err := StringToMessage("WHOIS a")
+	if err != nil {
+		t.Error(err)
+	}
+	if msg.Cmd != WhoisCmd {
+		t.Error("Could not parse 'WHOIS a' as Whois command")
+	}
+}
