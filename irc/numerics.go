@@ -9,8 +9,8 @@ import (
 // NumericCommand represents a numbered server reply
 type NumericCommand int
 
-//nolint: golint
-//noinspection GoSnakeCaseUsage
+// nolint: golint
+// noinspection GoSnakeCaseUsage
 const (
 	RPL_WELCOME  NumericCommand = 001
 	RPL_YOURHOST NumericCommand = 002
