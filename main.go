@@ -152,7 +152,7 @@ func (c *corpusCallosum) GetJoinedChannels() []string {
 }
 
 // SendPrivmsg sends an IRC PRIVMSG through Slack resolving channels properly
-func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
+func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) (err error) {
 	// TODO: we should enforce that we are not sending PRIVMSGs from other people
 
 	// Don't bother sending anything on an empty message
@@ -162,16 +162,15 @@ func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 
 	if privMsg.IsTargetChannel() {
 		channel := c.sc.ResolveNameToChannel(privMsg.Target)
-		err := c.sc.SendMessage(channel, privMsg.Message)
-		if err != nil {
-			log.Printf("%s error sending slack message: %v\n", c.sc.Tag(), err)
-		}
+		err = c.sc.SendMessage(channel, privMsg.Message)
 	} else if privMsg.IsValidTarget() {
 		slackUser := c.sc.ResolveNickToUser(privMsg.Target)
 		if slackUser != nil {
-			c.sc.SendDirectMessage(slackUser, privMsg.Message)
+			err = c.sc.SendDirectMessage(slackUser, privMsg.Message)
 		}
 	}
+
+	return
 }
 
 func (c *corpusCallosum) GetUserFromNick(nick string) irc.User {

@@ -9,5 +9,5 @@ linters:
     - gosimple
     - ineffassign
     - staticcheck
-    - structcheck
+    - unused
     - misspell

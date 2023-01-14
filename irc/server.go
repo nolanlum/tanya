@@ -1,12 +1,15 @@
 package irc
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"strings"
 	"sync"
 	"time"
 )
+
+var tanyaInternalUser = &User{Nick: "*tanya", Ident: "tanya"}
 
 // Server represents the IRC server listener for bridging IRC clients to Slack
 // and fanning out Slack events as necessary
@@ -131,7 +134,10 @@ func (s *Server) handleIncomingMessageRouting(incomingMessages <-chan *ServerMes
 			return
 		case msg := <-incomingMessages:
 			// Do not send the message back to the originator of the messages
-			handleIncomingMessage(msg.message, s.stateProvider)
+			err := handleIncomingMessage(msg.message, s.stateProvider)
+			if err != nil {
+				s.broadcastFromInternalUser(err.Error())
+			}
 
 			s.RLock()
 			for addr, conn := range s.clientConnections {
@@ -144,11 +150,24 @@ func (s *Server) handleIncomingMessageRouting(incomingMessages <-chan *ServerMes
 	}
 }
 
-func handleIncomingMessage(msg Messagable, ssp ServerStateProvider) {
+func handleIncomingMessage(msg Messagable, ssp ServerStateProvider) error {
 	switch m := msg.(type) {
 	case *Privmsg:
-		ssp.SendPrivmsg(m)
+		err := ssp.SendPrivmsg(m)
+		if err != nil {
+			return fmt.Errorf("failed to send message %#q: %w", m.Message, err)
+		}
 	}
+	return nil
+}
+
+func (s *Server) broadcastFromInternalUser(message string) {
+	s.RLock()
+	for _, conn := range s.clientConnections {
+		msg := &Privmsg{From: *tanyaInternalUser, Target: conn.clientUser.Nick, Message: message}
+		conn.outgoingMessages <- msg.ToMessage()
+	}
+	s.RUnlock()
 }
 
 // HandleOutgoingMessageRouting handles fanning out IRC messages generated from Slack events
@@ -215,7 +234,7 @@ type ServerStateProvider interface {
 
 	GetJoinedChannels() []string
 
-	SendPrivmsg(privMsg *Privmsg)
+	SendPrivmsg(privMsg *Privmsg) error
 
 	GetUserFromNick(nick string) User
 }
