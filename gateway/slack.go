@@ -96,7 +96,9 @@ type SlackClient struct {
 	slackURLEncoder    *strings.Replacer
 	slackURLDecoder    *strings.Replacer
 	conversationMarker *ConversationMarker
+	sentMessageQueue   *SentQueue
 
+	ownMessageLock sync.Mutex
 	sync.RWMutex
 }
 
@@ -116,6 +118,7 @@ func NewSlackClient() *SlackClient {
 		slackURLEncoder:    strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
 		slackURLDecoder:    strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
 		conversationMarker: NewConversationMarker(),
+		sentMessageQueue:   NewSentQueue(),
 	}
 }
 
@@ -282,7 +285,7 @@ func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, er
 	}
 
 	sc.RUnlock()
-	channelInfo, err := sc.client.GetConversationInfo(slackID, false)
+	channelInfo, err := sc.client.GetConversationInfo(&slack.GetConversationInfoInput{ChannelID: slackID})
 	if err != nil {
 		return
 	}
@@ -437,12 +440,7 @@ func (sc *SlackClient) Initialize(token string, debug bool) {
 
 // SendMessage sends a message to a SlackChannel
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
-	msg = sc.UnparseMessageText(msg)
-	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, channel.SlackID)
-	sc.conversationMarker.MarkConversation(sc.client, channel.SlackID, outgoingMessage.ID)
-	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, channel.SlackID, outgoingMessage.ID)
-	sc.rtm.SendMessage(outgoingMessage)
-	return nil
+	return sc.sendMessage(channel.SlackID, msg)
 }
 
 // SendDirectMessage sends a message to a SlackUser
@@ -452,11 +450,23 @@ func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
 		return err
 	}
 
+	return sc.sendMessage(imChannelID, msg)
+}
+
+func (sc *SlackClient) sendMessage(conversationID, msg string) error {
+	// Since Slack will echo messages that we send back to us, in order to suppress the echo, we need to
+	// temporarily inhibit the incoming RTM channel while we wait for the API call response with the message ts.
+	sc.ownMessageLock.Lock()
+	defer sc.ownMessageLock.Unlock()
+
 	msg = sc.UnparseMessageText(msg)
-	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, imChannelID)
-	sc.conversationMarker.MarkConversation(sc.client, imChannelID, outgoingMessage.ID)
-	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, imChannelID, outgoingMessage.ID)
-	sc.rtm.SendMessage(outgoingMessage)
+	_, ts, err := sc.client.PostMessage(conversationID, slack.MsgOptionText(msg, false))
+	if err != nil {
+		return err
+	}
+
+	sc.sentMessageQueue.MessageSent(conversationID, ts)
+	sc.conversationMarker.MarkConversation(sc.client, conversationID, ts)
 	return nil
 }
 
@@ -658,12 +668,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			case "ack":
 				// maybe we care about this
 				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
-					if inflightMessage, found := sc.inflightMessageMap[ack.ReplyTo]; found {
-						delete(sc.inflightMessageMap, ack.ReplyTo)
-						sc.conversationMarker.HandleRTMAck(inflightMessage.InitialMessageID, ack.Timestamp)
-					} else {
-						sc.conversationMarker.HandleRTMAck(ack.ReplyTo, ack.Timestamp)
-					}
+					delete(sc.inflightMessageMap, ack.ReplyTo)
 					continue
 				}
 				fallthrough

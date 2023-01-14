@@ -26,8 +26,19 @@ func messageTextToEvents(sender *SlackUser, target, messageText string) []*Slack
 }
 
 func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messageData *slack.MessageEvent) {
-	if messageData.User == "USLACKBOT" {
+	switch messageData.User {
+	case "USLACKBOT":
 		return
+	case sc.self.SlackID:
+		// Most of the time this lock acquisition will immediately succeed, and we have no need for it afterwards.
+		// However, if we're currently awaiting the result of a PostMessage call, this will effectively block the
+		// goroutine until we have a chance to update sentMessageQueue.
+		sc.ownMessageLock.Lock()
+		sc.ownMessageLock.Unlock()
+
+		if sc.sentMessageQueue.ShouldSuppress(messageData.Channel, messageData.Timestamp) {
+			return
+		}
 	}
 
 	var sender *SlackUser

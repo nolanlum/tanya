@@ -16,9 +16,11 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18
+        go-version: 1.19.5
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v3.3.1
+      with:
+        version: v1.50.1
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -37,7 +39,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.18
+        go-version: 1.19.5
     - name: Build
       run: go build -v -o ${{ matrix.outfile }}
     - name: Test
