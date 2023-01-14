@@ -125,27 +125,24 @@ func NewSlackClient() *SlackClient {
 
 func (sc *SlackClient) getConversations(gcp *slack.GetConversationsParameters) (channels []slack.Channel, cursor string, err error) {
 	var rateLimitErr *slack.RateLimitedError
-	var ok bool
 
 	for retries := 0; retries < getConvoRetries; retries++ {
-		channels, cursor, err = sc.client.GetConversations(gcp)
-		if err != nil {
-			if !errors.As(err, &rateLimitErr) {
-				ok = false
-				break
-			}
+		if retries > 0 {
 			log.Printf("%s slack:getconversations ratelimit wait for %s seconds", sc.Tag(), rateLimitErr.RetryAfter.String())
 			time.Sleep(rateLimitErr.RetryAfter)
-			continue
 		}
-		ok = true
+
+		channels, cursor, err = sc.client.GetConversations(gcp)
+		if err == nil {
+			return
+		}
+
+		if !errors.As(err, &rateLimitErr) {
+			return nil, "", err
+		}
 	}
 
-	if !ok {
-		return nil, "", err
-	}
-
-	return channels, cursor, nil
+	return
 }
 
 // Clear all stored state and reload workspace/conversation metadata from Slack.
