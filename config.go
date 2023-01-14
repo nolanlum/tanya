@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -39,7 +38,7 @@ func (g *GatewayInstance) SetDefaults() {
 
 // LoadConfig parses a config if it exists, or generates a new one
 func LoadConfig(configPath string, disableConfigGen bool) (*Config, error) {
-	tomlData, err := ioutil.ReadFile(configPath)
+	tomlData, err := os.ReadFile(configPath)
 
 	if !disableConfigGen && os.IsNotExist(err) {
 		fmt.Println("config.toml does not exist, generating one...")
