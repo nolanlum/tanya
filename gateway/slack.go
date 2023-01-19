@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/slack-go/slack"
 )
+
+// Number of times GetConversations calls should be retried
+const getConvoRetries = 3
 
 // SlackChannel holds data for a channel on Slack
 type SlackChannel struct {
@@ -100,6 +104,28 @@ func NewSlackClient() *SlackClient {
 	}
 }
 
+func (sc *SlackClient) getConversations(gcp *slack.GetConversationsParameters) (channels []slack.Channel, cursor string, err error) {
+	var rateLimitErr *slack.RateLimitedError
+
+	for retries := 0; retries < getConvoRetries; retries++ {
+		if retries > 0 {
+			log.Printf("%s slack:getconversations ratelimit wait for %s seconds", sc.Tag(), rateLimitErr.RetryAfter.String())
+			time.Sleep(rateLimitErr.RetryAfter)
+		}
+
+		channels, cursor, err = sc.client.GetConversations(gcp)
+		if err == nil {
+			return
+		}
+
+		if !errors.As(err, &rateLimitErr) {
+			return nil, "", err
+		}
+	}
+
+	return
+}
+
 // Clear all stored state and reload workspace/conversation metadata from Slack.
 // Called upon reconnection to ensure all cached state is up-to-date.
 func (sc *SlackClient) bootstrapMappings() {
@@ -119,7 +145,8 @@ func (sc *SlackClient) bootstrapMappings() {
 	for hasMore {
 		var channels []slack.Channel
 		var err error
-		channels, gcp.Cursor, err = sc.client.GetConversations(gcp)
+
+		channels, gcp.Cursor, err = sc.getConversations(gcp)
 		if err != nil {
 			log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
 		}
@@ -150,7 +177,7 @@ func (sc *SlackClient) bootstrapMappings() {
 		Limit:           0,
 		ExcludeArchived: true,
 	}
-	ims, _, err := sc.client.GetConversations(ucParams)
+	ims, _, err := sc.getConversations(ucParams)
 	if err != nil {
 		log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
 	}
@@ -358,7 +385,7 @@ func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
 		Limit:           0,
 		ExcludeArchived: true,
 	}
-	ims, _, err := sc.client.GetConversations(ucParams)
+	ims, _, err := sc.getConversations(ucParams)
 	if err != nil {
 		return nil, err
 	}
