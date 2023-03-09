@@ -199,7 +199,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			},
 		}
 
-	case "channel_leave", "channel_join":
+	case "channel_leave", "channel_join", "channel_archive", "channel_unarchive":
 		// These are already handled elsewhere, drop the message event.
 		return
 
