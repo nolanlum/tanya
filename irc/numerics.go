@@ -35,6 +35,7 @@ const (
 	RPL_ENDOFMOTD  NumericCommand = 376
 
 	ERR_NOSUCHNICK     NumericCommand = 401
+	ERR_NOSUCHCHANNEL  NumericCommand = 403
 	ERR_UNKNOWNCOMMAND NumericCommand = 421
 	ERR_NEEDMOREPARAMS NumericCommand = 461
 )
@@ -181,6 +182,14 @@ func ErrNoSuchNick(nick string) *NumericReply {
 	return &NumericReply{
 		Code:   ERR_NOSUCHNICK,
 		Params: []string{nick, "No such nick/channel"},
+	}
+}
+
+// ErrNoSuchChannel is the numeric reply to a command which provides a channel that doesn't exist
+func ErrNoSuchChannel(channelName string) *NumericReply {
+	return &NumericReply{
+		Code:   ERR_NOSUCHCHANNEL,
+		Params: []string{channelName, "No such channel"},
 	}
 }
 

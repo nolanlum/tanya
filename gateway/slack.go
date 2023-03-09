@@ -427,7 +427,7 @@ func (sc *SlackClient) GetChannelMemberships() (channels []SlackChannel) {
 type ClientChans struct {
 	OutgoingChan <-chan string
 	IncomingChan chan<- *SlackEvent
-	StopChan     <-chan interface{}
+	StopChan     <-chan struct{}
 }
 
 // Initialize bootstraps the SlackClient with a client token
@@ -612,8 +612,34 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				)
 				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
 
+			case "channel_joined":
+				channelJoinedEvent := event.Data.(*slack.ChannelJoinedEvent)
+				joinEvent, err := sc.handleMemberJoinedChannel(channelJoinedEvent.Channel.ID, sc.self.SlackID)
+
+				if err != nil {
+					joinEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling channel_joined event [%v]: %+v", err, channelJoinedEvent))
+				}
+
+				chans.IncomingChan <- joinEvent
+
+			case "channel_left":
+				channelLeftEvent := event.Data.(*slack.ChannelLeftEvent)
+				partEvent, err := sc.handleMemberLeftChannel(channelLeftEvent.Channel, sc.self.SlackID)
+
+				if err != nil {
+					partEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling channel_left event [%v]: %+v", err, channelLeftEvent))
+				}
+
+				chans.IncomingChan <- partEvent
+
 			case "member_joined_channel":
 				memberJoinedChannelEvent := event.Data.(*slack.MemberJoinedChannelEvent)
+				if memberJoinedChannelEvent.User == sc.self.SlackID {
+					continue
+				}
+
 				joinEvent, err := sc.handleMemberJoinedChannel(
 					memberJoinedChannelEvent.Channel, memberJoinedChannelEvent.User)
 
@@ -626,6 +652,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "member_left_channel":
 				memberLeftChannelEvent := event.Data.(*slack.MemberLeftChannelEvent)
+				if memberLeftChannelEvent.User == sc.self.SlackID {
+					continue
+				}
+
 				partEvent, err := sc.handleMemberLeftChannel(
 					memberLeftChannelEvent.Channel, memberLeftChannelEvent.User)
 
@@ -636,9 +666,26 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				chans.IncomingChan <- partEvent
 
+			case "unmarshalling_error":
+				unmarshallingErrorEvent := event.Data.(*slack.UnmarshallingErrorEvent)
+
+				switch err := unmarshallingErrorEvent.ErrorObj.(type) {
+				case slack.UnmappedError:
+					switch err.EventType {
+					case "clear_mention_notification",
+						"thread_subscribed", "update_thread_state", "thread_marked":
+						// ignore these, but idk how to tell when library support gets added
+						continue
+					}
+
+				default:
+					log.Printf("%s unmarshalling error: %+v", sc.Tag(), event.Data)
+				}
+
 			case "channel_marked", "group_marked", "thread_marked", "im_marked", "im_open",
+				"channel_archive", "channel_unarchive",
 				"latency_report", "user_typing", "pref_change", "dnd_updated_user", "desktop_notification",
-				"file_created", "file_public",
+				"file_created", "file_public", "file_change",
 				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
 				// haha nobody cares about this
 
