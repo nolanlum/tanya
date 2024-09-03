@@ -17,7 +17,7 @@ var configPathFlag = flag.String("config", "config.toml", "path to config file")
 var noGenFlag = flag.Bool("no-generate", false, "disables auto-generation of config files")
 var debugFlag = flag.Bool("debug", false, "toggles Slack library debug mode (logs to stdout)")
 
-func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
+func killHandler(sigChan <-chan os.Signal, stopChan chan<- struct{}) {
 	<-sigChan
 	log.Println("tanya shutting down, stopping connections and goroutines")
 	close(stopChan)
@@ -73,6 +73,11 @@ func slackToPart(j *gateway.JoinPartEventData) *irc.Part {
 // this name specially chosen to trigger ATRAN
 type corpusCallosum struct {
 	sc *gateway.SlackClient
+}
+
+// ChannelExists implements irc.ServerStateProvider.ChannelExists
+func (c *corpusCallosum) ChannelExists(channelName string) bool {
+	return c.sc.ResolveNameToChannel(channelName) != nil
 }
 
 // GetChannelUsers implements irc.ServerStateProvider.GetChannelUsers
@@ -184,7 +189,7 @@ func (c *corpusCallosum) GetUserFromNick(nick string) irc.User {
 func writeMessageLoop(
 	recvChan <-chan *gateway.SlackEvent,
 	sendChan chan<- *irc.Message,
-	stopChan <-chan interface{},
+	stopChan <-chan struct{},
 	server *irc.Server,
 ) {
 Loop:
@@ -223,7 +228,7 @@ Loop:
 	}
 }
 
-func launchGateway(conf *GatewayInstance, stopChan chan interface{}) {
+func launchGateway(conf *GatewayInstance, stopChan chan struct{}) {
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient()
 	slackClient.Initialize(conf.Slack.Token, *debugFlag)
@@ -251,7 +256,7 @@ func main() {
 	}
 
 	// Stop channel
-	stopChan := make(chan interface{})
+	stopChan := make(chan struct{})
 
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)
