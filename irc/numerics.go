@@ -23,6 +23,7 @@ const (
 
 	RPL_CHANNELMODEIS NumericCommand = 324
 	RPL_CREATIONTIME  NumericCommand = 329
+	RPL_NOTOPIC       NumericCommand = 331
 	RPL_TOPIC         NumericCommand = 332
 	RPL_TOPIC_WHOTIME NumericCommand = 333
 

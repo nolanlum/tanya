@@ -378,6 +378,14 @@ func (cc *clientConnection) sendWelcome() {
 }
 
 func (cc *clientConnection) sendChannelTopic(channelName string, topic ChannelTopic) {
+	if topic.Topic == "" {
+		cc.outgoingMessages <- cc.reply(NumericReply{
+			Code:   RPL_NOTOPIC,
+			Params: []string{channelName, "No topic is set."},
+		})
+		return
+	}
+
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
 		Params: []string{channelName, topic.Topic},
@@ -414,7 +422,9 @@ func (cc *clientConnection) sendChannelJoinedResponse(channelName string, topic 
 	}).ToMessage()
 	cc.outgoingMessages <- joinResponse
 
-	cc.sendChannelTopic(channelName, topic)
+	if topic.Topic != "" {
+		cc.sendChannelTopic(channelName, topic)
+	}
 
 	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
