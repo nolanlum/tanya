@@ -10,15 +10,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v6
       with:
         go-version: 1.19.5
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3.3.1
+      uses: golangci/golangci-lint-action@v9.2.0
       with:
         version: v1.50.1
   build:
@@ -33,11 +33,11 @@ jobs:
         - os: macos-latest
           outfile: tanya_macOS
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         submodules: true
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v6
       with:
         go-version: 1.19.5
     - name: Build
@@ -45,7 +45,7 @@ jobs:
     - name: Test
       run: go test -v -race ./...
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v7
       with:
         name: tanya-binaries
         path: ${{ matrix.outfile }}
@@ -56,11 +56,11 @@ jobs:
     steps:
     - name: Download binary artifacts
       id: download
-      uses: actions/download-artifact@v4.1.7
+      uses: actions/download-artifact@v8
       with:
         name: tanya-binaries
     - name: Upload release assets
-      uses: alexellis/upload-assets@0.2.3
+      uses: alexellis/upload-assets@0.4.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
