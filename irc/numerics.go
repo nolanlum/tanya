@@ -79,6 +79,11 @@ func MOTDAsNumerics(motd string) []*NumericReply {
 			Code:   RPL_MOTDSTART,
 			Params: []string{scanner.Text()},
 		})
+	} else {
+		replies = append(replies, &NumericReply{
+			Code:   RPL_MOTDSTART,
+			Params: []string{"- tanya Message of the Day -"},
+		})
 	}
 	for scanner.Scan() {
 		replies = append(replies, &NumericReply{
