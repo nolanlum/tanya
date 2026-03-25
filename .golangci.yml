@@ -1,13 +1,13 @@
 run:
-  timeout: 6m
   issues-exit-code: 1
-linters:
-  disable-all: true
+formatters:
   enable:
     - goimports
-    - govet
-    - gosimple
-    - ineffassign
+linters:
+  default: none
+  enable:
     - staticcheck
+    - govet
+    - ineffassign
     - unused
     - misspell
