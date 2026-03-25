@@ -50,7 +50,7 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	if nick == "" {
 		nick = user.Profile.RealNameNormalized
 	}
-	nick = strings.Replace(nick, " ", "\u00a0", -1)
+	nick = strings.ReplaceAll(nick, " ", "\u00a0")
 
 	return &SlackUser{
 		SlackID:  user.ID,

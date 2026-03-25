@@ -110,7 +110,7 @@ func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelT
 	}
 
 	topic.Topic = c.sc.ParseMessageText(channel.Topic.Value)
-	topic.Topic = strings.Replace(topic.Topic, "\n", " ", -1)
+	topic.Topic = strings.ReplaceAll(topic.Topic, "\n", " ")
 	topic.SetAt = channel.Topic.LastSet.Time()
 
 	if channel.Topic.Creator != "" {

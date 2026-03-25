@@ -137,15 +137,16 @@ SelectLoop:
 
 				}
 			case NickCmd:
-				if cc.state == clientStateRegistering {
+				switch cc.state {
+				case clientStateRegistering:
 					cc.clientUser.Nick = msg.Params[0]
 					cc.state = clientStateAwaitingUser
-				} else if cc.state == clientStateAwaitingNick {
+				case clientStateAwaitingNick:
 					// Finish registration if we already have the USER
 					cc.clientUser.Nick = msg.Params[0]
 					cc.state = clientStateRegistered
 					cc.finishRegistration()
-				} else {
+				default:
 					cc.outgoingMessages <- (&Nick{
 						From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
 						NewNick: cc.serverUser.Nick,
@@ -153,9 +154,10 @@ SelectLoop:
 				}
 
 			case UserCmd:
-				if cc.state == clientStateRegistering {
+				switch cc.state {
+				case clientStateRegistering:
 					cc.state = clientStateAwaitingNick
-				} else if cc.state == clientStateAwaitingUser {
+				case clientStateAwaitingUser:
 					// Finish registration if we already have the NICK
 					cc.state = clientStateRegistered
 					cc.finishRegistration()
@@ -223,7 +225,7 @@ SelectLoop:
 				})
 
 			case TopicCmd:
-				// nolint: megacheck
+				//nolint:staticcheck // SA9003: empty branch
 				if len(msg.Params) == 1 {
 					channelName := msg.Params[0]
 					topic := cc.stateProvider.GetChannelTopic(channelName)
