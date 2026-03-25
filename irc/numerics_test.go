@@ -232,3 +232,15 @@ func TestErrUnknownCommand(t *testing.T) {
 		t.Errorf("ErrUnknownCommand() = %v, want %v", got, want)
 	}
 }
+
+func TestErrNoSuchChannel(t *testing.T) {
+	want := &NumericReply{
+		Code:   ERR_NOSUCHCHANNEL,
+		Params: []string{"#poop", "No such channel"},
+	}
+	got := ErrNoSuchChannel("#poop")
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ErrNoSuchChannel() = %v, want %v", got, want)
+	}
+}

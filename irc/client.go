@@ -26,13 +26,14 @@ type clientConnection struct {
 	clientUser User
 	serverUser *User
 
-	state clientState
+	state       clientState
+	joinedChans map[string]struct{}
 
 	outgoingMessages chan *Message
 	serverChan       chan<- *ServerMessage
 
-	slackConnected <-chan interface{}
-	shutdown       chan interface{}
+	slackConnected <-chan struct{}
+	shutdown       chan struct{}
 }
 
 func newClientConnection(
@@ -41,7 +42,7 @@ func newClientConnection(
 	config *Config,
 	stateProvider ServerStateProvider,
 	serverChan chan *ServerMessage,
-	slackConnectedChan <-chan interface{},
+	slackConnectedChan <-chan struct{},
 ) *clientConnection {
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
@@ -53,11 +54,13 @@ func newClientConnection(
 		clientUser: User{Nick: "*", Ident: user.Ident, Host: ip},
 		serverUser: user,
 
+		joinedChans: make(map[string]struct{}),
+
 		outgoingMessages: make(chan *Message),
 		serverChan:       serverChan,
 
 		slackConnected: slackConnectedChan,
-		shutdown:       make(chan interface{}),
+		shutdown:       make(chan struct{}),
 	}
 }
 
@@ -177,20 +180,25 @@ SelectLoop:
 					channelName = strings.ToLower(channelName)
 
 					// Ignore if we've already joined this channel (to avoid sending WHO/NAMES again)
-					for _, joinedChannel := range cc.stateProvider.GetJoinedChannels() {
-						if channelName == joinedChannel {
-							continue SelectLoop
-						}
+					if _, found := cc.joinedChans[channelName]; found {
+						continue SelectLoop
 					}
 
-					// TODO make this actually join if we're not already a part of the channel
+					// TODO join the channel on the Slack-side too
 					cc.handleChannelJoined(channelName)
 				}
 
 			case PartCmd:
-				// TODO make this do more than just echo
-				msg.Prefix = cc.clientUser.String()
-				cc.outgoingMessages <- msg
+				// Slack channel names are forcibly lowercased...RIP casemapping
+				channelName := strings.ToLower(msg.Params[0])
+
+				// Ignore if we're not in this channel
+				if _, found := cc.joinedChans[channelName]; !found {
+					continue SelectLoop
+				}
+
+				// TODO part the channel on the Slack-side too
+				cc.handleChannelParted(channelName)
 
 			case ModeCmd:
 				if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
@@ -384,9 +392,16 @@ func (cc *clientConnection) sendChannelTopic(channelName string, topic ChannelTo
 }
 
 func (cc *clientConnection) handleChannelJoined(channelName string) {
+	exists := cc.stateProvider.ChannelExists(channelName)
+	if !exists {
+		cc.outgoingMessages <- cc.reply(*ErrNoSuchChannel(channelName))
+		return
+	}
+
 	topic := cc.stateProvider.GetChannelTopic(channelName)
 	users := cc.stateProvider.GetChannelUsers(channelName)
 
+	cc.joinedChans[channelName] = struct{}{}
 	cc.sendChannelJoinedResponse(channelName, topic, users)
 }
 
@@ -402,4 +417,14 @@ func (cc *clientConnection) sendChannelJoinedResponse(channelName string, topic 
 	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
 	}
+}
+
+func (cc *clientConnection) handleChannelParted(channelName string) {
+	delete(cc.joinedChans, channelName)
+
+	partResponse := (&Part{
+		User:    cc.clientUser,
+		Channel: channelName,
+	}).ToMessage()
+	cc.outgoingMessages <- partResponse
 }

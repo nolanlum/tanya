@@ -15,10 +15,10 @@ var tanyaInternalUser = &User{Nick: "*tanya", Ident: "tanya"}
 // and fanning out Slack events as necessary
 type Server struct {
 	clientConnections map[net.Addr]*clientConnection
-	stopChan          <-chan interface{}
+	stopChan          <-chan struct{}
 
 	initOnce sync.Once
-	initChan chan interface{}
+	initChan chan struct{}
 
 	selfUser      User
 	config        *Config
@@ -42,12 +42,12 @@ type ChannelTopic struct {
 }
 
 // NewServer creates a new IRC server
-func NewServer(config *Config, stopChan <-chan interface{}, stateProvider ServerStateProvider) *Server {
+func NewServer(config *Config, stopChan <-chan struct{}, stateProvider ServerStateProvider) *Server {
 	return &Server{
 		clientConnections: make(map[net.Addr]*clientConnection),
 		stopChan:          stopChan,
 
-		initChan: make(chan interface{}),
+		initChan: make(chan struct{}),
 
 		config:        config,
 		stateProvider: stateProvider,
@@ -224,6 +224,8 @@ func (s *Server) HandleChannelJoined(channelName string) {
 // ServerStateProvider contains methods used by the IRC server to answer
 // client queries about channels and their members.
 type ServerStateProvider interface {
+	ChannelExists(channelName string) bool
+
 	GetChannelUsers(channelName string) []User
 
 	GetChannelTopic(channelName string) ChannelTopic
