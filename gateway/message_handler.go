@@ -26,8 +26,19 @@ func messageTextToEvents(sender *SlackUser, target, messageText string) []*Slack
 }
 
 func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messageData *slack.MessageEvent) {
-	if messageData.User == "USLACKBOT" {
+	switch messageData.User {
+	case "USLACKBOT":
 		return
+	case sc.self.SlackID:
+		// Most of the time this lock acquisition will immediately succeed, and we have no need for it afterwards.
+		// However, if we're currently awaiting the result of a PostMessage call, this will effectively block the
+		// goroutine until we have a chance to update sentMessageQueue.
+		sc.ownMessageLock.Lock()
+		sc.ownMessageLock.Unlock()
+
+		if sc.sentMessageQueue.ShouldSuppress(messageData.Channel, messageData.Timestamp) {
+			return
+		}
 	}
 
 	sender, target, wasSenderSwapped := sc.resolveMessageEndpoints(&messageData.Msg)
@@ -153,7 +164,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 			},
 		}
 
-	case "channel_leave", "channel_join":
+	case "channel_leave", "channel_join", "channel_archive", "channel_unarchive":
 		// These are already handled elsewhere, drop the message event.
 		return
 
@@ -183,10 +194,14 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 
 		messageText := sc.ParseMessageText(subMessage.Text)
 		for _, attachment := range subMessage.Attachments {
+			attachmentText := sc.ParseMessageText(attachment.Fallback)
+			if attachmentText == "" {
+				continue
+			}
 			if messageText == "" {
-				messageText = sc.ParseMessageText(attachment.Fallback)
+				messageText = attachmentText
 			} else {
-				messageText = messageText + "\n" + sc.ParseMessageText(attachment.Fallback)
+				messageText = messageText + "\n" + attachmentText
 			}
 		}
 
@@ -201,7 +216,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		// Only quote the first line of a multi-line message.
 		messageEvents := messageTextToEvents(sender, target, messageText)
 		if len(messageEvents) > 0 {
-			incomingChan <- messageTextToEvents(sender, target, messageText)[0]
+			incomingChan <- messageEvents[0]
 		}
 
 	default:
@@ -219,30 +234,32 @@ func (sc *SlackClient) resolveMessageEndpoints(messageData *slack.Msg) (sender *
 		}
 	}
 
-	if messageData.Channel != "" {
-		if isDmChannel(messageData.Channel) {
-			target = sc.self.Nick
+	if messageData.Channel == "" {
+		return
+	}
 
-			// If we sent this DM, then the sender needs to be faked to the other user
-			// because IRC clients can't display DMs done by others on your behalf
-			if sender == sc.self {
-				otherUser, err := sc.ResolveDMToUser(messageData.Channel)
-				if err != nil {
-					log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.Tag(), err, messageData)
-					return
-				}
+	if isDmChannel(messageData.Channel) {
+		target = sc.self.Nick
 
-				sender = otherUser
-				wasSenderSwapped = true
-			}
-		} else {
-			channel, err := sc.ResolveChannel(messageData.Channel)
+		// If we sent this DM, then the sender needs to be faked to the other user
+		// because IRC clients can't display DMs done by others on your behalf
+		if sender == sc.self {
+			otherUser, err := sc.ResolveDMToUser(messageData.Channel)
 			if err != nil {
-				log.Printf("%s could not resolve channel for message [%v]: %+v", sc.Tag(), err, messageData)
+				log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.Tag(), err, messageData)
 				return
 			}
-			target = channel.Name
+
+			sender = otherUser
+			wasSenderSwapped = true
 		}
+	} else {
+		channel, err := sc.ResolveChannel(messageData.Channel)
+		if err != nil {
+			log.Printf("%s could not resolve channel for message [%v]: %+v", sc.Tag(), err, messageData)
+			return
+		}
+		target = channel.Name
 	}
 
 	return

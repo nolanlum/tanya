@@ -1,11 +1,15 @@
 module github.com/nolanlum/tanya
 
-go 1.13
+go 1.25
 
 require (
-	github.com/BurntSushi/toml v0.3.1
+	github.com/BurntSushi/toml v1.2.1
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/pkg/errors v0.9.1 // indirect
-	github.com/slack-go/slack v0.8.2
-	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
+	github.com/slack-go/slack v0.23.1
+	golang.org/x/term v0.4.0
+)
+
+require (
+	github.com/gorilla/websocket v1.5.3 // indirect
+	golang.org/x/sys v0.4.0 // indirect
 )

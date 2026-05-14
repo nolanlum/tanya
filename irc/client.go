@@ -26,13 +26,14 @@ type clientConnection struct {
 	clientUser User
 	serverUser *User
 
-	state clientState
+	state       clientState
+	joinedChans map[string]struct{}
 
 	outgoingMessages chan *Message
 	serverChan       chan<- *ServerMessage
 
-	slackConnected <-chan interface{}
-	shutdown       chan interface{}
+	slackConnected <-chan struct{}
+	shutdown       chan struct{}
 }
 
 func newClientConnection(
@@ -41,7 +42,7 @@ func newClientConnection(
 	config *Config,
 	stateProvider ServerStateProvider,
 	serverChan chan *ServerMessage,
-	slackConnectedChan <-chan interface{},
+	slackConnectedChan <-chan struct{},
 ) *clientConnection {
 	ip, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 
@@ -53,11 +54,13 @@ func newClientConnection(
 		clientUser: User{Nick: "*", Ident: user.Ident, Host: ip},
 		serverUser: user,
 
+		joinedChans: make(map[string]struct{}),
+
 		outgoingMessages: make(chan *Message),
 		serverChan:       serverChan,
 
 		slackConnected: slackConnectedChan,
-		shutdown:       make(chan interface{}),
+		shutdown:       make(chan struct{}),
 	}
 }
 
@@ -134,15 +137,16 @@ SelectLoop:
 
 				}
 			case NickCmd:
-				if cc.state == clientStateRegistering {
+				switch cc.state {
+				case clientStateRegistering:
 					cc.clientUser.Nick = msg.Params[0]
 					cc.state = clientStateAwaitingUser
-				} else if cc.state == clientStateAwaitingNick {
+				case clientStateAwaitingNick:
 					// Finish registration if we already have the USER
 					cc.clientUser.Nick = msg.Params[0]
 					cc.state = clientStateRegistered
 					cc.finishRegistration()
-				} else {
+				default:
 					cc.outgoingMessages <- (&Nick{
 						From:    User{Nick: msg.Params[0], Ident: cc.serverUser.Ident},
 						NewNick: cc.serverUser.Nick,
@@ -150,9 +154,10 @@ SelectLoop:
 				}
 
 			case UserCmd:
-				if cc.state == clientStateRegistering {
+				switch cc.state {
+				case clientStateRegistering:
 					cc.state = clientStateAwaitingNick
-				} else if cc.state == clientStateAwaitingUser {
+				case clientStateAwaitingUser:
 					// Finish registration if we already have the NICK
 					cc.state = clientStateRegistered
 					cc.finishRegistration()
@@ -177,20 +182,25 @@ SelectLoop:
 					channelName = strings.ToLower(channelName)
 
 					// Ignore if we've already joined this channel (to avoid sending WHO/NAMES again)
-					for _, joinedChannel := range cc.stateProvider.GetJoinedChannels() {
-						if channelName == joinedChannel {
-							continue SelectLoop
-						}
+					if _, found := cc.joinedChans[channelName]; found {
+						continue SelectLoop
 					}
 
-					// TODO make this actually join if we're not already a part of the channel
+					// TODO join the channel on the Slack-side too
 					cc.handleChannelJoined(channelName)
 				}
 
 			case PartCmd:
-				// TODO make this do more than just echo
-				msg.Prefix = cc.clientUser.String()
-				cc.outgoingMessages <- msg
+				// Slack channel names are forcibly lowercased...RIP casemapping
+				channelName := strings.ToLower(msg.Params[0])
+
+				// Ignore if we're not in this channel
+				if _, found := cc.joinedChans[channelName]; !found {
+					continue SelectLoop
+				}
+
+				// TODO part the channel on the Slack-side too
+				cc.handleChannelParted(channelName)
 
 			case ModeCmd:
 				if len(msg.Params) < 1 || msg.Params[0][0] != '#' {
@@ -215,7 +225,7 @@ SelectLoop:
 				})
 
 			case TopicCmd:
-				// nolint: megacheck
+				//nolint:staticcheck // SA9003: empty branch
 				if len(msg.Params) == 1 {
 					channelName := msg.Params[0]
 					topic := cc.stateProvider.GetChannelTopic(channelName)
@@ -233,6 +243,20 @@ SelectLoop:
 				channelName := msg.Params[0]
 				users := cc.stateProvider.GetChannelUsers(channelName)
 				for _, m := range WholistAsNumerics(users, channelName, cc.config.ServerName) {
+					cc.outgoingMessages <- cc.reply(*m)
+				}
+
+			case WhoisCmd:
+				whoisNick := msg.Params[0]
+				whoisUser := cc.stateProvider.GetUserFromNick(whoisNick)
+
+				// Check for zero value, reply with no such user in that case.
+				if whoisUser.Nick == "" {
+					cc.outgoingMessages <- cc.reply(*ErrNoSuchNick(whoisNick))
+					continue
+				}
+
+				for _, m := range WhoisAsNumerics(whoisUser) {
 					cc.outgoingMessages <- cc.reply(*m)
 				}
 			}
@@ -354,6 +378,14 @@ func (cc *clientConnection) sendWelcome() {
 }
 
 func (cc *clientConnection) sendChannelTopic(channelName string, topic ChannelTopic) {
+	if topic.Topic == "" {
+		cc.outgoingMessages <- cc.reply(NumericReply{
+			Code:   RPL_NOTOPIC,
+			Params: []string{channelName, "No topic is set."},
+		})
+		return
+	}
+
 	cc.outgoingMessages <- cc.reply(NumericReply{
 		Code:   RPL_TOPIC,
 		Params: []string{channelName, topic.Topic},
@@ -370,9 +402,16 @@ func (cc *clientConnection) sendChannelTopic(channelName string, topic ChannelTo
 }
 
 func (cc *clientConnection) handleChannelJoined(channelName string) {
+	exists := cc.stateProvider.ChannelExists(channelName)
+	if !exists {
+		cc.outgoingMessages <- cc.reply(*ErrNoSuchChannel(channelName))
+		return
+	}
+
 	topic := cc.stateProvider.GetChannelTopic(channelName)
 	users := cc.stateProvider.GetChannelUsers(channelName)
 
+	cc.joinedChans[channelName] = struct{}{}
 	cc.sendChannelJoinedResponse(channelName, topic, users)
 }
 
@@ -383,9 +422,21 @@ func (cc *clientConnection) sendChannelJoinedResponse(channelName string, topic 
 	}).ToMessage()
 	cc.outgoingMessages <- joinResponse
 
-	cc.sendChannelTopic(channelName, topic)
+	if topic.Topic != "" {
+		cc.sendChannelTopic(channelName, topic)
+	}
 
 	for _, m := range NamelistAsNumerics(users, channelName) {
 		cc.outgoingMessages <- cc.reply(*m)
 	}
+}
+
+func (cc *clientConnection) handleChannelParted(channelName string) {
+	delete(cc.joinedChans, channelName)
+
+	partResponse := (&Part{
+		User:    cc.clientUser,
+		Channel: channelName,
+	}).ToMessage()
+	cc.outgoingMessages <- partResponse
 }

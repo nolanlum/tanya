@@ -1,9 +1,9 @@
 package gateway
 
 import (
+	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"os"
 	"strings"
 	"sync"
@@ -12,6 +12,9 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/slack-go/slack"
 )
+
+// Number of times GetConversations calls should be retried
+const getConvoRetries = 3
 
 // SlackChannel holds data for a channel on Slack
 type SlackChannel struct {
@@ -48,32 +51,12 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 	if nick == "" {
 		nick = user.Profile.RealNameNormalized
 	}
-	nick = strings.Replace(nick, " ", "\u00a0", -1)
+	nick = strings.ReplaceAll(nick, " ", "\u00a0")
 
 	return &SlackUser{
 		SlackID:  user.ID,
 		Nick:     nick,
 		RealName: user.RealName,
-	}
-}
-
-type inflightMessage struct {
-	MessageText        string
-	DestinationSlackID string
-	InitialMessageID   int
-
-	RetriesRemaining int
-	RetryInterval    time.Duration
-}
-
-func newInflightMessage(msg string, destinationSlackID string, initialMessageID int) *inflightMessage {
-	return &inflightMessage{
-		MessageText:        msg,
-		DestinationSlackID: destinationSlackID,
-		InitialMessageID:   initialMessageID,
-
-		RetriesRemaining: 3,
-		RetryInterval:    time.Second + (time.Duration(rand.Intn(1000)) * time.Millisecond),
 	}
 }
 
@@ -93,14 +76,14 @@ type SlackClient struct {
 	channelNameToIDMap map[string]string
 	userIDToDMIDMap    map[string]string
 
-	inflightMessageMap map[int]*inflightMessage
 	slackURLEncoder    *strings.Replacer
 	slackURLDecoder    *strings.Replacer
 	conversationMarker *ConversationMarker
+	sentMessageQueue   *SentQueue
 
 	threadTimestamps    *lru.Cache
 	threadQuoteInterval int
-
+	ownMessageLock      sync.Mutex
 	sync.RWMutex
 }
 
@@ -117,10 +100,10 @@ func NewSlackClient(threadQuoteInterval int) *SlackClient {
 		channelNameToIDMap: make(map[string]string),
 		userIDToDMIDMap:    make(map[string]string),
 
-		slackURLEncoder:    strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
-		slackURLDecoder:    strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
-		conversationMarker: NewConversationMarker(),
-
+		slackURLEncoder:     strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
+		slackURLDecoder:     strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+		conversationMarker:  NewConversationMarker(),
+		sentMessageQueue:    NewSentQueue(),
 		threadQuoteInterval: threadQuoteInterval,
 	}
 
@@ -130,6 +113,312 @@ func NewSlackClient(threadQuoteInterval int) *SlackClient {
 	}
 
 	return sc
+}
+
+func (sc *SlackClient) getConversations(gcp *slack.GetConversationsParameters) (channels []slack.Channel, cursor string, err error) {
+	var rateLimitErr *slack.RateLimitedError
+
+	for retries := 0; retries < getConvoRetries; retries++ {
+		if retries > 0 {
+			log.Printf("%s slack:getconversations ratelimit wait for %s seconds", sc.Tag(), rateLimitErr.RetryAfter.String())
+			time.Sleep(rateLimitErr.RetryAfter)
+		}
+
+		channels, cursor, err = sc.client.GetConversations(gcp)
+		if err == nil {
+			return
+		}
+
+		if !errors.As(err, &rateLimitErr) {
+			return nil, "", err
+		}
+	}
+
+	return
+}
+
+// Clear all stored state and reload workspace/conversation metadata from Slack.
+// Called upon reconnection to ensure all cached state is up-to-date.
+func (sc *SlackClient) bootstrapMappings() {
+	startTime := time.Now()
+
+	channelInfo := make(map[string]*SlackChannel)
+	userInfo := make(map[string]*SlackUser)
+	dmInfo := make(map[string]*SlackUser)
+	channelMemberships := make(map[string]*SlackChannel)
+
+	hasMore := true
+	gcp := &slack.GetConversationsParameters{
+		ExcludeArchived: true,
+		Limit:           1000,
+		Types:           []string{"public_channel", "private_channel"},
+	}
+	for hasMore {
+		var channels []slack.Channel
+		var err error
+
+		channels, gcp.Cursor, err = sc.getConversations(gcp)
+		if err != nil {
+			log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
+		}
+
+		for _, channel := range channels {
+			slackChannel := slackChannelFromDto(&channel)
+
+			channelInfo[channel.ID] = slackChannel
+			if channel.IsMember {
+				channelMemberships[channel.ID] = slackChannel
+			}
+		}
+
+		hasMore = gcp.Cursor != ""
+	}
+
+	users, err := sc.client.GetUsers()
+	if err != nil {
+		log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetUsers", err)
+	}
+	for _, user := range users {
+		userInfo[user.ID] = slackUserFromDto(&user)
+	}
+
+	ucParams := &slack.GetConversationsParameters{
+		Cursor:          "",
+		Types:           []string{"im"},
+		Limit:           0,
+		ExcludeArchived: true,
+	}
+	ims, _, err := sc.getConversations(ucParams)
+	if err != nil {
+		log.Fatalf("%s [fatal] slack:init %s err: %v", sc.Tag(), "GetConversations", err)
+	}
+	for _, im := range ims {
+		dmInfo[im.ID] = userInfo[im.User]
+	}
+
+	sc.Lock()
+	sc.channelInfo = channelInfo
+	sc.userInfo = userInfo
+	sc.dmInfo = dmInfo
+	sc.channelMemberships = channelMemberships
+	sc.channelMembers = make(map[string]map[string]*SlackUser)
+	sc.Unlock()
+
+	sc.conversationMarker.Reset()
+	sc.regenerateReverseMappings()
+	sc.cleanupMappings()
+
+	log.Printf("%s slack:init channels:%v users:%v dms:%v memberships:%v time:%v", sc.Tag(),
+		len(sc.channelInfo), len(sc.userInfo), len(sc.dmInfo), len(sc.channelMemberships), time.Since(startTime))
+}
+
+// Regenerate the cached reverse nick/channel name mappings
+// If two channels have the same name, then whelp the first one we find wins
+func (sc *SlackClient) regenerateReverseMappings() {
+	sc.Lock()
+	defer sc.Unlock()
+
+	sc.nickToUserMap = make(map[string]string)
+	for _, user := range sc.userInfo {
+		if user == nil {
+			continue
+		}
+		sc.nickToUserMap[user.Nick] = user.SlackID
+	}
+
+	sc.channelNameToIDMap = make(map[string]string)
+	for _, channel := range sc.channelInfo {
+		if channel == nil {
+			continue
+		}
+		sc.channelNameToIDMap[channel.Name] = channel.SlackID
+	}
+
+	sc.userIDToDMIDMap = make(map[string]string)
+	for dmID, user := range sc.dmInfo {
+		if user == nil {
+			continue
+		}
+		sc.userIDToDMIDMap[user.SlackID] = dmID
+	}
+}
+
+// Clean up our mappings if necessary
+func (sc *SlackClient) cleanupMappings() {
+	sc.Lock()
+	defer sc.Unlock()
+
+	for channelName, channel := range sc.channelInfo {
+		if channel == nil {
+			delete(sc.userInfo, channelName)
+		}
+	}
+
+	for username, user := range sc.userInfo {
+		if user == nil {
+			delete(sc.userInfo, username)
+		}
+	}
+
+	for dmName, dmUser := range sc.dmInfo {
+		if dmUser == nil {
+			delete(sc.dmInfo, dmName)
+		}
+	}
+}
+
+// ResolveUser takes a slackID and fetches a SlackUser for the ID
+func (sc *SlackClient) ResolveUser(slackID string) (user *SlackUser, err error) {
+	sc.RLock()
+	user, found := sc.userInfo[slackID]
+	if found {
+		sc.RUnlock()
+		return
+	}
+
+	sc.RUnlock()
+	userInfo, err := sc.client.GetUserInfo(slackID)
+	if err != nil {
+		return
+	}
+	user = slackUserFromDto(userInfo)
+
+	sc.Lock()
+	sc.userInfo[user.SlackID] = user
+	sc.nickToUserMap[user.Nick] = user.SlackID
+	sc.Unlock()
+	return
+}
+
+// ResolveChannel takes a slackID and fetches a SlackChannel for the ID
+func (sc *SlackClient) ResolveChannel(slackID string) (channel *SlackChannel, err error) {
+	sc.RLock()
+	channel, found := sc.channelInfo[slackID]
+	if found {
+		sc.RUnlock()
+		return
+	}
+
+	sc.RUnlock()
+	channelInfo, err := sc.client.GetConversationInfo(&slack.GetConversationInfoInput{ChannelID: slackID})
+	if err != nil {
+		return
+	}
+	channel = slackChannelFromDto(channelInfo)
+
+	sc.Lock()
+	sc.channelInfo[channel.SlackID] = channel
+	sc.channelNameToIDMap[channel.Name] = channel.SlackID
+	sc.Unlock()
+	return
+}
+
+// ResolveNameToChannel takes a channel name and fetches a SlackChannel with that name
+func (sc *SlackClient) ResolveNameToChannel(channelName string) *SlackChannel {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	if channelID, found := sc.channelNameToIDMap[channelName]; found {
+		if channelInfo, found := sc.channelInfo[channelID]; found {
+			if channelInfo.Name != channelName {
+				log.Panicf("SlackClient.channelNameToIDMap had stale data: %v = %v != %v",
+					channelName, channelID, channelInfo.Name)
+			}
+
+			return channelInfo
+		}
+	}
+
+	return nil
+}
+
+// ResolveNickToUser takes a nick and fetches a SlackUser with that nick
+func (sc *SlackClient) ResolveNickToUser(nick string) *SlackUser {
+	sc.RLock()
+	defer sc.RUnlock()
+
+	if userID, found := sc.nickToUserMap[nick]; found {
+		if userInfo, found := sc.userInfo[userID]; found {
+			if userInfo.Nick != nick {
+				log.Panicf("SlackClient.nickToUserMap had stale data: %v = %v != %v", nick, userID, userInfo.Nick)
+			}
+
+			return userInfo
+		}
+	}
+
+	return nil
+}
+
+// ResolveUserToDM resolves a SlackUser to their DM channel, opening one if it doesn't exist
+func (sc *SlackClient) ResolveUserToDM(user *SlackUser) (string, error) {
+	sc.RLock()
+	dmID, found := sc.userIDToDMIDMap[user.SlackID]
+	sc.RUnlock()
+
+	if found {
+		return dmID, nil
+	}
+
+	ocp := &slack.OpenConversationParameters{
+		ChannelID: user.SlackID,
+		ReturnIM:  true,
+		Users:     []string{user.SlackID},
+	}
+	channel, _, _, err := sc.client.OpenConversation(ocp)
+	if err != nil {
+		return "", err
+	}
+	dmID = channel.ID
+
+	sc.Lock()
+	sc.dmInfo[dmID] = user
+	sc.userIDToDMIDMap[user.SlackID] = dmID
+	sc.Unlock()
+
+	return dmID, nil
+}
+
+// ResolveDMToUser resolves a DM/IM Channel ID to the User the DM is for
+func (sc *SlackClient) ResolveDMToUser(dmChannelID string) (*SlackUser, error) {
+	sc.RLock()
+	slackUser, found := sc.dmInfo[dmChannelID]
+	sc.RUnlock()
+
+	if found {
+		return slackUser, nil
+	}
+
+	slackUser = nil
+	ucParams := &slack.GetConversationsParameters{
+		Cursor:          "",
+		Types:           []string{"im"},
+		Limit:           0,
+		ExcludeArchived: true,
+	}
+	ims, _, err := sc.getConversations(ucParams)
+	if err != nil {
+		return nil, err
+	}
+
+	sc.Lock()
+	for _, im := range ims {
+		// Skip this IM if we cannot find the user it belongs to
+		if userInfo, found := sc.userInfo[im.User]; found {
+			sc.dmInfo[im.ID] = userInfo
+			sc.userIDToDMIDMap[userInfo.SlackID] = im.ID
+			if im.ID == dmChannelID {
+				slackUser = userInfo
+			}
+		}
+	}
+	sc.Unlock()
+
+	if slackUser != nil {
+		return slackUser, nil
+	}
+
+	return nil, fmt.Errorf("could not find user for DM: %s", dmChannelID)
 }
 
 // GetChannelMemberships returns the channels this SlackClient is a member of
@@ -149,7 +438,7 @@ func (sc *SlackClient) GetChannelMemberships() (channels []SlackChannel) {
 type ClientChans struct {
 	OutgoingChan <-chan string
 	IncomingChan chan<- *SlackEvent
-	StopChan     <-chan interface{}
+	StopChan     <-chan struct{}
 }
 
 // Initialize bootstraps the SlackClient with a client token
@@ -166,18 +455,7 @@ func (sc *SlackClient) Initialize(token string, debug bool) {
 
 // SendMessage sends a message to a SlackChannel
 func (sc *SlackClient) SendMessage(channel *SlackChannel, msg string) error {
-	msg = sc.UnparseMessageText(msg)
-	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, channel.SlackID)
-
-	if channel.Private {
-		sc.conversationMarker.MarkGroup(sc.client, channel.SlackID, outgoingMessage.ID)
-	} else {
-		sc.conversationMarker.MarkChannel(sc.client, channel.SlackID, outgoingMessage.ID)
-	}
-
-	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, channel.SlackID, outgoingMessage.ID)
-	sc.rtm.SendMessage(outgoingMessage)
-	return nil
+	return sc.sendMessage(channel.SlackID, msg)
 }
 
 // SendDirectMessage sends a message to a SlackUser
@@ -187,26 +465,24 @@ func (sc *SlackClient) SendDirectMessage(user *SlackUser, msg string) error {
 		return err
 	}
 
-	msg = sc.UnparseMessageText(msg)
-	outgoingMessage := sc.rtm.NewOutgoingMessage(msg, imChannelID)
-	sc.conversationMarker.MarkDM(sc.client, imChannelID, outgoingMessage.ID)
-	sc.inflightMessageMap[outgoingMessage.ID] = newInflightMessage(msg, imChannelID, outgoingMessage.ID)
-	sc.rtm.SendMessage(outgoingMessage)
-	return nil
+	return sc.sendMessage(imChannelID, msg)
 }
 
-func (sc *SlackClient) retryInflightMessage(msg *inflightMessage) {
-	// Process retry backoff.
-	time.Sleep(msg.RetryInterval)
-	msg.RetriesRemaining -= 1
-	msg.RetryInterval = 2*msg.RetryInterval.Truncate(time.Second) + time.Duration(rand.Intn(1000))*time.Millisecond
+func (sc *SlackClient) sendMessage(conversationID, msg string) error {
+	// Since Slack will echo messages that we send back to us, in order to suppress the echo, we need to
+	// temporarily inhibit the incoming RTM channel while we wait for the API call response with the message ts.
+	sc.ownMessageLock.Lock()
+	defer sc.ownMessageLock.Unlock()
 
-	// Create new RTM outgoing message and add to tracking map.
-	outgoingMessage := sc.rtm.NewOutgoingMessage(msg.MessageText, msg.DestinationSlackID)
-	sc.inflightMessageMap[outgoingMessage.ID] = msg
+	msg = sc.UnparseMessageText(msg)
+	_, ts, err := sc.client.PostMessage(conversationID, slack.MsgOptionText(msg, false))
+	if err != nil {
+		return err
+	}
 
-	// Send.
-	sc.rtm.SendMessage(outgoingMessage)
+	sc.sentMessageQueue.MessageSent(conversationID, ts)
+	sc.conversationMarker.MarkConversation(sc.client, conversationID, ts)
+	return nil
 }
 
 func newSlackMessageEvent(from *SlackUser, target, message string) *SlackEvent {
@@ -347,8 +623,34 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 				)
 				chans.IncomingChan <- newSlackMessageEvent(user, target.Name, sc.slackURLDecoder.Replace(shareMessage))
 
+			case "channel_joined":
+				channelJoinedEvent := event.Data.(*slack.ChannelJoinedEvent)
+				joinEvent, err := sc.handleMemberJoinedChannel(channelJoinedEvent.Channel.ID, sc.self.SlackID)
+
+				if err != nil {
+					joinEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling channel_joined event [%v]: %+v", err, channelJoinedEvent))
+				}
+
+				chans.IncomingChan <- joinEvent
+
+			case "channel_left":
+				channelLeftEvent := event.Data.(*slack.ChannelLeftEvent)
+				partEvent, err := sc.handleMemberLeftChannel(channelLeftEvent.Channel, sc.self.SlackID)
+
+				if err != nil {
+					partEvent = sc.newInternalMessageEvent(fmt.Sprintf(
+						"error handling channel_left event [%v]: %+v", err, channelLeftEvent))
+				}
+
+				chans.IncomingChan <- partEvent
+
 			case "member_joined_channel":
 				memberJoinedChannelEvent := event.Data.(*slack.MemberJoinedChannelEvent)
+				if memberJoinedChannelEvent.User == sc.self.SlackID {
+					continue
+				}
+
 				joinEvent, err := sc.handleMemberJoinedChannel(
 					memberJoinedChannelEvent.Channel, memberJoinedChannelEvent.User)
 
@@ -361,6 +663,10 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "member_left_channel":
 				memberLeftChannelEvent := event.Data.(*slack.MemberLeftChannelEvent)
+				if memberLeftChannelEvent.User == sc.self.SlackID {
+					continue
+				}
+
 				partEvent, err := sc.handleMemberLeftChannel(
 					memberLeftChannelEvent.Channel, memberLeftChannelEvent.User)
 
@@ -371,37 +677,28 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 				chans.IncomingChan <- partEvent
 
+			case "unmarshalling_error":
+				unmarshallingErrorEvent := event.Data.(*slack.UnmarshallingErrorEvent)
+
+				switch err := unmarshallingErrorEvent.ErrorObj.(type) {
+				case slack.UnmappedError:
+					switch err.EventType {
+					case "clear_mention_notification",
+						"thread_subscribed", "update_thread_state", "thread_marked":
+						// ignore these, but idk how to tell when library support gets added
+						continue
+					}
+
+				default:
+					log.Printf("%s unmarshalling error: %+v", sc.Tag(), event.Data)
+				}
+
 			case "channel_marked", "group_marked", "thread_marked", "im_marked", "im_open",
+				"channel_archive", "channel_unarchive",
 				"latency_report", "user_typing", "pref_change", "dnd_updated_user", "desktop_notification",
-				"file_created", "file_public",
+				"file_created", "file_public", "file_change",
 				"reaction_added", "reaction_removed", "pin_added", "pin_removed":
 				// haha nobody cares about this
-
-			case "ack_error":
-				ackError := event.Data.(*slack.AckErrorEvent)
-				if inflightMessage, found := sc.inflightMessageMap[ackError.ReplyTo]; found {
-					delete(sc.inflightMessageMap, ackError.ReplyTo)
-					chans.IncomingChan <- sc.newInternalMessageEvent(fmt.Sprintf(
-						"failed to send message [%v], retry in %ds: %v",
-						inflightMessage.MessageText,
-						inflightMessage.RetryInterval.Truncate(time.Second)/time.Second,
-						ackError.Error(),
-					))
-					go sc.retryInflightMessage(inflightMessage)
-				}
-
-			case "ack":
-				// maybe we care about this
-				if ack, ok := event.Data.(*slack.AckMessage); ok && ack.Ok {
-					if inflightMessage, found := sc.inflightMessageMap[ack.ReplyTo]; found {
-						delete(sc.inflightMessageMap, ack.ReplyTo)
-						sc.conversationMarker.HandleRTMAck(inflightMessage.InitialMessageID, ack.Timestamp)
-					} else {
-						sc.conversationMarker.HandleRTMAck(ack.ReplyTo, ack.Timestamp)
-					}
-					continue
-				}
-				fallthrough
 
 			default:
 				log.Printf("%s unhandled event [%v]: %+v", sc.Tag(), event.Type, event.Data)

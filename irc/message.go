@@ -19,6 +19,7 @@ const (
 	ModeCmd
 	TopicCmd
 	WhoCmd
+	WhoisCmd
 
 	PingCmd
 	PongCmd
@@ -43,6 +44,7 @@ var cmdToStrMap = map[Command]string{
 	ModeCmd:    "MODE",
 	TopicCmd:   "TOPIC",
 	WhoCmd:     "WHO",
+	WhoisCmd:   "WHOIS",
 
 	PingCmd: "PING",
 	PongCmd: "PONG",
@@ -159,6 +161,11 @@ func StringToMessage(str string) (*Message, error) {
 		return &Message{prefix, TopicCmd, params}, nil
 	case "WHO":
 		return &Message{prefix, WhoCmd, params}, nil
+	case "WHOIS":
+		if len(params) < 1 {
+			return nil, ErrNeedMoreParams("WHOIS")
+		}
+		return &Message{prefix, WhoisCmd, params}, nil
 	case "PING":
 		return &Message{prefix, PingCmd, params}, nil
 	default:

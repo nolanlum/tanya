@@ -17,7 +17,7 @@ var configPathFlag = flag.String("config", "config.toml", "path to config file")
 var noGenFlag = flag.Bool("no-generate", false, "disables auto-generation of config files")
 var debugFlag = flag.Bool("debug", false, "toggles Slack library debug mode (logs to stdout)")
 
-func killHandler(sigChan <-chan os.Signal, stopChan chan<- interface{}) {
+func killHandler(sigChan <-chan os.Signal, stopChan chan<- struct{}) {
 	<-sigChan
 	log.Println("tanya shutting down, stopping connections and goroutines")
 	close(stopChan)
@@ -75,6 +75,11 @@ type corpusCallosum struct {
 	sc *gateway.SlackClient
 }
 
+// ChannelExists implements irc.ServerStateProvider.ChannelExists
+func (c *corpusCallosum) ChannelExists(channelName string) bool {
+	return c.sc.ResolveNameToChannel(channelName) != nil
+}
+
 // GetChannelUsers implements irc.ServerStateProvider.GetChannelUsers
 func (c *corpusCallosum) GetChannelUsers(channelName string) []irc.User {
 	channel := c.sc.ResolveNameToChannel(channelName)
@@ -105,7 +110,7 @@ func (c *corpusCallosum) GetChannelTopic(channelName string) (topic irc.ChannelT
 	}
 
 	topic.Topic = c.sc.ParseMessageText(channel.Topic.Value)
-	topic.Topic = strings.Replace(topic.Topic, "\n", " ", -1)
+	topic.Topic = strings.ReplaceAll(topic.Topic, "\n", " ")
 	topic.SetAt = channel.Topic.LastSet.Time()
 
 	if channel.Topic.Creator != "" {
@@ -152,7 +157,7 @@ func (c *corpusCallosum) GetJoinedChannels() []string {
 }
 
 // SendPrivmsg sends an IRC PRIVMSG through Slack resolving channels properly
-func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
+func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) (err error) {
 	// TODO: we should enforce that we are not sending PRIVMSGs from other people
 
 	// Don't bother sending anything on an empty message
@@ -162,16 +167,15 @@ func (c *corpusCallosum) SendPrivmsg(privMsg *irc.Privmsg) {
 
 	if privMsg.IsTargetChannel() {
 		channel := c.sc.ResolveNameToChannel(privMsg.Target)
-		err := c.sc.SendMessage(channel, privMsg.Message)
-		if err != nil {
-			log.Printf("%s error sending slack message: %v\n", c.sc.Tag(), err)
-		}
+		err = c.sc.SendMessage(channel, privMsg.Message)
 	} else if privMsg.IsValidTarget() {
 		slackUser := c.sc.ResolveNickToUser(privMsg.Target)
 		if slackUser != nil {
-			c.sc.SendDirectMessage(slackUser, privMsg.Message)
+			err = c.sc.SendDirectMessage(slackUser, privMsg.Message)
 		}
 	}
+
+	return
 }
 
 func (c *corpusCallosum) GetUserFromNick(nick string) irc.User {
@@ -185,7 +189,7 @@ func (c *corpusCallosum) GetUserFromNick(nick string) irc.User {
 func writeMessageLoop(
 	recvChan <-chan *gateway.SlackEvent,
 	sendChan chan<- *irc.Message,
-	stopChan <-chan interface{},
+	stopChan <-chan struct{},
 	server *irc.Server,
 ) {
 Loop:
@@ -224,7 +228,7 @@ Loop:
 	}
 }
 
-func launchGateway(conf *GatewayInstance, stopChan chan interface{}) {
+func launchGateway(conf *GatewayInstance, stopChan chan struct{}) {
 	slackIncomingChan := make(chan *gateway.SlackEvent)
 	slackClient := gateway.NewSlackClient(conf.Slack.ThreadQuoteIntervalSec)
 	slackClient.Initialize(conf.Slack.Token, *debugFlag)
@@ -252,7 +256,7 @@ func main() {
 	}
 
 	// Stop channel
-	stopChan := make(chan interface{})
+	stopChan := make(chan struct{})
 
 	// Setup our stop handling
 	killSignalChan := make(chan os.Signal, 1)

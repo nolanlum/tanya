@@ -9,16 +9,21 @@ import (
 // NumericCommand represents a numbered server reply
 type NumericCommand int
 
-//nolint: golint
-//noinspection GoSnakeCaseUsage
+// nolint: golint
+// noinspection GoSnakeCaseUsage
 const (
 	RPL_WELCOME  NumericCommand = 001
 	RPL_YOURHOST NumericCommand = 002
 	RPL_CREATED  NumericCommand = 003
 	RPL_ISUPPORT NumericCommand = 005
 
+	RPL_WHOISUSER   NumericCommand = 311
+	RPL_WHOISSERVER NumericCommand = 312
+	RPL_ENDOFWHOIS  NumericCommand = 318
+
 	RPL_CHANNELMODEIS NumericCommand = 324
 	RPL_CREATIONTIME  NumericCommand = 329
+	RPL_NOTOPIC       NumericCommand = 331
 	RPL_TOPIC         NumericCommand = 332
 	RPL_TOPIC_WHOTIME NumericCommand = 333
 
@@ -30,6 +35,8 @@ const (
 	RPL_MOTDSTART  NumericCommand = 375
 	RPL_ENDOFMOTD  NumericCommand = 376
 
+	ERR_NOSUCHNICK     NumericCommand = 401
+	ERR_NOSUCHCHANNEL  NumericCommand = 403
 	ERR_UNKNOWNCOMMAND NumericCommand = 421
 	ERR_NEEDMOREPARAMS NumericCommand = 461
 )
@@ -72,6 +79,11 @@ func MOTDAsNumerics(motd string) []*NumericReply {
 		replies = append(replies, &NumericReply{
 			Code:   RPL_MOTDSTART,
 			Params: []string{scanner.Text()},
+		})
+	} else {
+		replies = append(replies, &NumericReply{
+			Code:   RPL_MOTDSTART,
+			Params: []string{"- tanya Message of the Day -"},
 		})
 	}
 	for scanner.Scan() {
@@ -151,6 +163,40 @@ func NamelistAsNumerics(users []User, channelName string) []*NumericReply {
 		Params: []string{channelName, "End of /NAMES list"},
 	})
 	return replies
+}
+
+// WhoisAsNumerics formats a User into a series of WHOIS replies
+func WhoisAsNumerics(user User) []*NumericReply {
+	return []*NumericReply{
+		{
+			Code:   RPL_WHOISUSER,
+			Params: []string{user.Nick, user.Ident, user.Host, "*", user.RealName},
+		},
+		{
+			Code:   RPL_WHOISSERVER,
+			Params: []string{user.Nick, "tanya", "Slack IRC Gateway"},
+		},
+		{
+			Code:   RPL_ENDOFWHOIS,
+			Params: []string{user.Nick, "End of /WHOIS list"},
+		},
+	}
+}
+
+// ErrNoSuchNick is the numeric reply to a command which provides an invalid nick
+func ErrNoSuchNick(nick string) *NumericReply {
+	return &NumericReply{
+		Code:   ERR_NOSUCHNICK,
+		Params: []string{nick, "No such nick/channel"},
+	}
+}
+
+// ErrNoSuchChannel is the numeric reply to a command which provides a channel that doesn't exist
+func ErrNoSuchChannel(channelName string) *NumericReply {
+	return &NumericReply{
+		Code:   ERR_NOSUCHCHANNEL,
+		Params: []string{channelName, "No such channel"},
+	}
 }
 
 // ErrUnknownCommand is the numeric reply to an unknown or invalid command
