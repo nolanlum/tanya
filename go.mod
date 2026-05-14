@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	github.com/BurntSushi/toml v1.2.1
-	github.com/slack-go/slack v0.20.0
+	github.com/slack-go/slack v0.23.1
 	golang.org/x/term v0.4.0
 )
 
