@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/slack-go/slack"
 )
 
@@ -80,13 +81,15 @@ type SlackClient struct {
 	conversationMarker *ConversationMarker
 	sentMessageQueue   *SentQueue
 
-	ownMessageLock sync.Mutex
+	threadTimestamps    *lru.Cache
+	threadQuoteInterval int
+	ownMessageLock      sync.Mutex
 	sync.RWMutex
 }
 
 // NewSlackClient creates a new SlackClient with some default values
-func NewSlackClient() *SlackClient {
-	return &SlackClient{
+func NewSlackClient(threadQuoteInterval int) *SlackClient {
+	sc := &SlackClient{
 		channelInfo:        make(map[string]*SlackChannel),
 		userInfo:           make(map[string]*SlackUser),
 		dmInfo:             make(map[string]*SlackUser),
@@ -97,11 +100,19 @@ func NewSlackClient() *SlackClient {
 		channelNameToIDMap: make(map[string]string),
 		userIDToDMIDMap:    make(map[string]string),
 
-		slackURLEncoder:    strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
-		slackURLDecoder:    strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
-		conversationMarker: NewConversationMarker(),
-		sentMessageQueue:   NewSentQueue(),
+		slackURLEncoder:     strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;"),
+		slackURLDecoder:     strings.NewReplacer("&gt;", ">", "&lt;", "<", "&amp;", "&"),
+		conversationMarker:  NewConversationMarker(),
+		sentMessageQueue:    NewSentQueue(),
+		threadQuoteInterval: threadQuoteInterval,
 	}
+
+	var err error
+	if sc.threadTimestamps, err = lru.New(128); err != nil {
+		log.Panicf("Could not create new LRU: %v", err)
+	}
+
+	return sc
 }
 
 func (sc *SlackClient) getConversations(gcp *slack.GetConversationsParameters) (channels []slack.Channel, cursor string, err error) {
