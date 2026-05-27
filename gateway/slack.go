@@ -63,6 +63,7 @@ func slackUserFromDto(user *slack.User) *SlackUser {
 type SlackClient struct {
 	client *slack.Client
 	rtm    *slack.RTM
+	selfID string
 	self   *SlackUser
 
 	channelInfo        map[string]*SlackChannel
@@ -509,7 +510,7 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 			switch event.Type {
 			case "connection_error":
 				connEventError := event.Data.(*slack.ConnectionErrorEvent)
-				log.Printf("%s slack connection error: %v\n", sc.Tag(), connEventError.Error())
+				log.Printf("%s slack connection error: %v", sc.Tag(), connEventError.Error())
 
 			case "incoming_error":
 				incomingEventError := event.Data.(*slack.IncomingEventError)
@@ -531,11 +532,15 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 
 			case "connected":
 				connectedData := event.Data.(*slack.ConnectedEvent)
+				sc.selfID = connectedData.Info.User.ID
+				log.Printf("%s tanya established rtm connection as %v", sc.Tag(), sc.selfID)
+
+			case "hello":
 				sc.bootstrapMappings()
 				go sc.bootstrapChannelUserList()
-				sc.self = sc.userInfo[connectedData.Info.User.ID]
+				sc.self = sc.userInfo[sc.selfID]
 
-				log.Printf("%s tanya connected to slack as %v\n", sc.Tag(), sc.self)
+				log.Printf("%s tanya connected to slack as %v", sc.Tag(), sc.self)
 
 				chans.IncomingChan <- &SlackEvent{
 					EventType: SlackConnectedEvent,
@@ -543,8 +548,6 @@ func (sc *SlackClient) Poop(chans *ClientChans) {
 						UserInfo: sc.self,
 					},
 				}
-
-			case "hello":
 				chans.IncomingChan <- sc.newInternalMessageEvent("connected to slack!")
 
 			case "disconnected":
