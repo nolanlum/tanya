@@ -11,7 +11,10 @@
 
     [gateway.slack]
     # Slack client token
-    token = ""
+    Token = ""
+    # Time in seconds since the last thread reply to trigger quoting of the original message
+    # Set to 0 to disable original message quoting entirely
+    ThreadQuoteIntervalSec = 0
 
 # Multiple gateway sections can be specified for multiple workspaces
 [[gateway]]
@@ -19,4 +22,4 @@
     ListenAddr = ":6668"
 
     [gateway.slack]
-    token = ""
+    Token = ""

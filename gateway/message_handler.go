@@ -41,42 +41,7 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		}
 	}
 
-	var sender *SlackUser
-	if messageData.User != "" {
-		var err error
-		if sender, err = sc.ResolveUser(messageData.User); err != nil {
-			log.Printf("%s could not resolve user for message [%v]: %+v", sc.Tag(), err, messageData)
-			return
-		}
-	}
-
-	var target string
-	wasSenderSwapped := false
-	if messageData.Channel != "" {
-		if isDmChannel(messageData.Channel) {
-			target = sc.self.Nick
-
-			// If we sent this DM, then the sender needs to be faked to the other user
-			// because IRC clients can't display DMs done by others on your behalf
-			if sender == sc.self {
-				otherUser, err := sc.ResolveDMToUser(messageData.Channel)
-				if err != nil {
-					log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.Tag(), err, messageData)
-					return
-				}
-
-				sender = otherUser
-				wasSenderSwapped = true
-			}
-		} else {
-			channel, err := sc.ResolveChannel(messageData.Channel)
-			if err != nil {
-				log.Printf("%s could not resolve channel for message [%v]: %+v", sc.Tag(), err, messageData)
-				return
-			}
-			target = channel.Name
-		}
-	}
+	sender, target, wasSenderSwapped := sc.resolveMessageEndpoints(&messageData.Msg)
 
 	switch messageData.SubType {
 	case "", "pinned_item", "thread_broadcast":
@@ -204,11 +169,98 @@ func (sc *SlackClient) handleMessageEvent(incomingChan chan<- *SlackEvent, messa
 		return
 
 	case "message_replied":
-		// As far as I can tell, this is only useful for updating the reply count of a message thread.
-		return
+		// Handle thread replies by maybe quoting the parent message if enough time has passed.
+		subMessage := messageData.SubMessage
+		if subMessage == nil {
+			log.Printf("%s message_replied with missing submessage: %+v SubMessage:%+v",
+				sc.Tag(), messageData, messageData.SubMessage)
+			return
+		}
+
+		if subMessage.Type != "message" {
+			log.Printf("%s message_replied with unexpected submessage type: %+v SubMessage:%+v",
+				sc.Tag(), messageData, messageData.SubMessage)
+			return
+		}
+
+		if !sc.shouldQuoteThreadParent(subMessage.ThreadTimestamp, messageData.Timestamp) {
+			return
+		}
+
+		sender, _, wasSenderSwapped = sc.resolveMessageEndpoints(subMessage)
+		if sender == nil || target == "" {
+			return
+		}
+
+		messageText := sc.ParseMessageText(subMessage.Text)
+		for _, attachment := range subMessage.Attachments {
+			attachmentText := sc.ParseMessageText(attachment.Fallback)
+			if attachmentText == "" {
+				continue
+			}
+			if messageText == "" {
+				messageText = attachmentText
+			} else {
+				messageText = messageText + "\n" + attachmentText
+			}
+		}
+
+		// >be me
+		messageText = "><" + sender.Nick + "> " + messageText
+
+		// If we had swapped senders earlier, make sure the message reflects this swap
+		if wasSenderSwapped {
+			messageText = "[" + sc.self.Nick + "] " + messageText
+		}
+
+		// Only quote the first line of a multi-line message.
+		messageEvents := messageTextToEvents(sender, target, messageText)
+		if len(messageEvents) > 0 {
+			incomingChan <- messageEvents[0]
+		}
 
 	default:
 		log.Printf("%s unhandled message sub-type [%v]: %+v SubMessage:%+v",
 			sc.Tag(), messageData.SubType, messageData, messageData.SubMessage)
 	}
+}
+
+func (sc *SlackClient) resolveMessageEndpoints(messageData *slack.Msg) (sender *SlackUser, target string, wasSenderSwapped bool) {
+	if messageData.User != "" {
+		var err error
+		if sender, err = sc.ResolveUser(messageData.User); err != nil {
+			log.Printf("%s could not resolve user for message [%v]: %+v", sc.Tag(), err, messageData)
+			return
+		}
+	}
+
+	if messageData.Channel == "" {
+		return
+	}
+
+	if isDmChannel(messageData.Channel) {
+		target = sc.self.Nick
+
+		// If we sent this DM, then the sender needs to be faked to the other user
+		// because IRC clients can't display DMs done by others on your behalf
+		if sender == sc.self {
+			otherUser, err := sc.ResolveDMToUser(messageData.Channel)
+			if err != nil {
+				log.Printf("%s could not resolve DM user for message [%v]: %+v", sc.Tag(), err, messageData)
+				return
+			}
+
+			sender = otherUser
+			wasSenderSwapped = true
+		}
+	} else {
+		channel, err := sc.ResolveChannel(messageData.Channel)
+		if err != nil {
+			log.Printf("%s could not resolve channel for message [%v]: %+v", sc.Tag(), err, messageData)
+			return
+		}
+		target = channel.Name
+	}
+
+	return
 }

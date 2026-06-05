@@ -2,7 +2,7 @@ package gateway
 
 import "sync"
 
-// SentQueue handles de-deuplication of messages originating from this gateway echoed back to us by Slack.
+// SentQueue handles deduplication of messages originating from this gateway echoed back to us by Slack.
 type SentQueue struct {
 	sentMessageSet map[sentMessage]struct{}
 

@@ -10,7 +10,8 @@ import (
 )
 
 type slack struct {
-	Token string
+	Token                  string
+	ThreadQuoteIntervalSec int
 }
 
 // Config holds configuration data for Tanya

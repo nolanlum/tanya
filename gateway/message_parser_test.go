@@ -84,7 +84,7 @@ func TestSlackClient_ParseMessageText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := NewSlackClient()
+			sc := NewSlackClient(0)
 			sc.channelInfo = tt.fields.channelInfo
 			sc.userInfo = tt.fields.userInfo
 
@@ -122,7 +122,7 @@ func TestSlackClient_ParseMessageTextWithOptions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := NewSlackClient()
+			sc := NewSlackClient(0)
 			sc.channelInfo = tt.fields.channelInfo
 			sc.userInfo = tt.fields.userInfo
 
@@ -207,7 +207,7 @@ func TestSlackClient_UnparseMessageText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sc := NewSlackClient()
+			sc := NewSlackClient(0)
 			sc.channelInfo = tt.fields.channelInfo
 			sc.userInfo = tt.fields.userInfo
 			sc.regenerateReverseMappings()
